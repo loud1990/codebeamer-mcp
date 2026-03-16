@@ -37,9 +37,17 @@ An MCP (Model Context Protocol) server for Codebeamer ALM. Allows Claude and oth
 - Node.js 20+
 - Access to a Codebeamer instance (URL, username, password)
 
-### Quick Start (npm)
+### Claude Code (CLI)
 
-No need to clone the repository. Add this to your `.mcp.json` (project root or `~/.claude/mcp.json` for global):
+The fastest way — run this command in your terminal:
+
+```bash
+claude mcp add codebeamer -e CB_URL=https://your-instance.example.com/cb/api \
+  -e CB_USERNAME=your_username -e CB_PASSWORD=your_password \
+  -- npx -y codebeamer-mcp
+```
+
+Or add it manually to `.mcp.json` in the project root (or `~/.claude/mcp.json` for global scope):
 
 ```json
 {
@@ -58,17 +66,124 @@ No need to clone the repository. Add this to your `.mcp.json` (project root or `
 }
 ```
 
-That's it — `npx` downloads and runs the latest version automatically.
+### Claude Desktop
 
-#### Alternative: global install
+Edit the config file for your platform:
+
+| Platform | Path |
+|---|---|
+| macOS | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Windows | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Linux | `~/.config/Claude/claude_desktop_config.json` |
+
+```json
+{
+  "mcpServers": {
+    "codebeamer": {
+      "command": "npx",
+      "args": ["-y", "codebeamer-mcp"],
+      "env": {
+        "CB_URL": "https://your-instance.example.com/cb/api",
+        "CB_USERNAME": "your_username",
+        "CB_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop after saving.
+
+### Cursor
+
+Add to `.cursor/mcp.json` in the project root (project scope) or `~/.cursor/mcp.json` (global):
+
+```json
+{
+  "mcpServers": {
+    "codebeamer": {
+      "command": "npx",
+      "args": ["-y", "codebeamer-mcp"],
+      "env": {
+        "CB_URL": "https://your-instance.example.com/cb/api",
+        "CB_USERNAME": "your_username",
+        "CB_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+### Windsurf
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "codebeamer": {
+      "command": "npx",
+      "args": ["-y", "codebeamer-mcp"],
+      "env": {
+        "CB_URL": "https://your-instance.example.com/cb/api",
+        "CB_USERNAME": "your_username",
+        "CB_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+### VS Code (Copilot)
+
+Add to `.vscode/mcp.json` in the project root:
+
+```json
+{
+  "servers": {
+    "codebeamer": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "codebeamer-mcp"],
+      "env": {
+        "CB_URL": "https://your-instance.example.com/cb/api",
+        "CB_USERNAME": "your_username",
+        "CB_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+### Gemini CLI
+
+Add to `~/.gemini/settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "codebeamer": {
+      "command": "npx",
+      "args": ["-y", "codebeamer-mcp"],
+      "env": {
+        "CB_URL": "https://your-instance.example.com/cb/api",
+        "CB_USERNAME": "your_username",
+        "CB_PASSWORD": "your_password"
+      }
+    }
+  }
+}
+```
+
+### Alternative: global install
 
 ```bash
 npm install -g codebeamer-mcp
 ```
 
-Then use `"command": "codebeamer-mcp"` instead of `npx` in the config above.
+Then use `"command": "codebeamer-mcp"` (no `args`) instead of `npx` in any config above.
 
-#### Pinning a specific version
+### Pinning a specific version
 
 ```json
 "args": ["-y", "codebeamer-mcp@0.2.0"]
