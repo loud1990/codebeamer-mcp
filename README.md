@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server for Codebeamer ALM. Allows Claude and oth
 
 [![codebeamer-mcp MCP server](https://glama.ai/mcp/servers/3KniGHtcZ/codebeamer-mcp/badges/card.svg)](https://glama.ai/mcp/servers/3KniGHtcZ/codebeamer-mcp)
 
-## Tools (21)
+## Tools (23)
 
 ### Read
 
@@ -25,6 +25,7 @@ An MCP (Model Context Protocol) server for Codebeamer ALM. Allows Claude and oth
 | `get_item_comments` | Get item comments |
 | `get_item_reviews` | Get Review Hub reviews for an item (result, reviewers, votes) |
 | `get_user` | Get user details |
+| `generate_daily_test_report` | Generate a daily report from Test Run tracker items and recursive children |
 
 ### Write
 
@@ -36,6 +37,7 @@ An MCP (Model Context Protocol) server for Codebeamer ALM. Allows Claude and oth
 | `create_association` | Create an association between two items (e.g. depends on, blocks) |
 | `create_reference` | Add a downstream traceability reference between two items |
 | `create_harm` | Create a harm entry in an RM Harms List tracker with IMDRF code and severity (1–5) |
+| `create_daily_test_log` | Create a Test Log item from a reviewed daily test report |
 
 ## Installation
 

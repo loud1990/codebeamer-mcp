@@ -12,14 +12,37 @@ export const handlers = [
     HttpResponse.json([makeProject(), makeProject({ id: 2, name: "Second Project", keyName: "SEC" })]),
   ),
 
-  http.get(`${BASE}/projects/:id`, ({ params }) =>
-    HttpResponse.json(makeProject({ id: Number(params.id) })),
-  ),
+  http.get(`${BASE}/projects/:id`, ({ params }) => {
+    const id = Number(params.id);
+    if (id === 77) {
+      return HttpResponse.json(makeProject({ id, name: "Daily Test Project", keyName: "DTP" }));
+    }
+    return HttpResponse.json(makeProject({ id }));
+  }),
 
   // Trackers
-  http.get(`${BASE}/projects/:projectId/trackers`, () =>
-    HttpResponse.json([makeTracker()]),
-  ),
+  http.get(`${BASE}/projects/:projectId/trackers`, ({ params }) => {
+    const projectId = Number(params.projectId);
+    if (projectId === 77) {
+      return HttpResponse.json([
+        makeTracker({
+          id: 300,
+          name: "Test Runs",
+          keyName: "TESTRUN",
+          type: { id: 9, name: "Testrun", type: "TrackerTypeReference" },
+          project: { id: 77, name: "Daily Test Project" },
+        }),
+        makeTracker({
+          id: 301,
+          name: "Test Logs",
+          keyName: "TESTLOG",
+          type: { id: 200, name: "Task", type: "TrackerTypeReference" },
+          project: { id: 77, name: "Daily Test Project" },
+        }),
+      ]);
+    }
+    return HttpResponse.json([makeTracker()]);
+  }),
 
   http.get(`${BASE}/trackers/:id/fields/:fieldId`, ({ params }) =>
     HttpResponse.json(makeDetailedTrackerField({ fieldId: Number(params.fieldId) })),
@@ -47,14 +70,56 @@ export const handlers = [
     });
   }),
 
-  http.get(`${BASE}/trackers/:id`, ({ params }) =>
-    HttpResponse.json(makeTracker({ id: Number(params.id) })),
-  ),
+  http.get(`${BASE}/trackers/:id`, ({ params }) => {
+    const id = Number(params.id);
+    if (id === 300) {
+      return HttpResponse.json(
+        makeTracker({
+          id,
+          name: "Test Runs",
+          keyName: "TESTRUN",
+          type: { id: 9, name: "Testrun", type: "TrackerTypeReference" },
+          project: { id: 77, name: "Daily Test Project" },
+        }),
+      );
+    }
+    if (id === 301) {
+      return HttpResponse.json(
+        makeTracker({
+          id,
+          name: "Test Logs",
+          keyName: "TESTLOG",
+          type: { id: 200, name: "Task", type: "TrackerTypeReference" },
+          project: { id: 77, name: "Daily Test Project" },
+        }),
+      );
+    }
+    return HttpResponse.json(makeTracker({ id }));
+  }),
 
   // Items
-  http.get(`${BASE}/items/query`, () =>
-    HttpResponse.json([makeItem(), makeItem({ id: 501, name: "Another bug" })]),
-  ),
+  http.get(`${BASE}/items/query`, ({ request }) => {
+    const url = new URL(request.url);
+    const query = url.searchParams.get("queryString") ?? "";
+    const page = Number(url.searchParams.get("page") ?? "1");
+    if (query.includes("tracker.id IN (300)")) {
+      if (page > 1) return HttpResponse.json({ items: [] });
+      return HttpResponse.json({
+        items: [
+          makeItem({
+            id: 900,
+            name: "Daily regression run",
+            tracker: { id: 300, name: "Test Runs" },
+            project: { id: 77, name: "Daily Test Project" },
+            status: { id: 30, name: "Completed" },
+            priority: { id: 2, name: "Normal" },
+            updatedAt: "2026-05-01T18:30:00Z",
+          }),
+        ],
+      });
+    }
+    return HttpResponse.json([makeItem(), makeItem({ id: 501, name: "Another bug" })]);
+  }),
 
   http.get(`${BASE}/items/:id/relations`, () =>
     HttpResponse.json(makeItemRelationsPage()),
@@ -62,6 +127,14 @@ export const handlers = [
 
   http.get(`${BASE}/items/:id/children`, ({ params }) => {
     const id = Number(params.id);
+    if (id === 900) {
+      return HttpResponse.json({
+        itemRefs: [
+          { id: 901, name: "TC-01 Login succeeds", type: "TrackerItemReference" },
+        ],
+      });
+    }
+    if (id === 901) return HttpResponse.json({ itemRefs: [] });
     if (id === 999) return HttpResponse.json({ itemRefs: [] });
     return HttpResponse.json({
       itemRefs: [
@@ -105,6 +178,58 @@ export const handlers = [
   http.get(`${BASE}/items/:id`, ({ params }) => {
     const id = Number(params.id);
     if (id === 700) return HttpResponse.json(makeTestCaseItem());
+    if (id === 900) {
+      return HttpResponse.json(
+        makeItem({
+          id,
+          name: "Daily regression run",
+          tracker: { id: 300, name: "Test Runs" },
+          project: { id: 77, name: "Daily Test Project" },
+          status: { id: 30, name: "Completed" },
+          priority: { id: 2, name: "Normal" },
+          createdAt: "2026-05-01T08:00:00Z",
+          updatedAt: "2026-05-01T18:30:00Z",
+          customFields: [
+            {
+              fieldId: 200,
+              name: "Result",
+              type: "ChoiceFieldValue",
+              value: { id: 1, name: "Passed" },
+            },
+          ],
+        }),
+      );
+    }
+    if (id === 901) {
+      return HttpResponse.json(
+        makeItem({
+          id,
+          name: "TC-01 Login succeeds",
+          tracker: { id: 300, name: "Test Runs" },
+          project: { id: 77, name: "Daily Test Project" },
+          status: { id: 31, name: "Passed" },
+          priority: { id: 2, name: "Normal" },
+          createdAt: "2026-05-01T08:05:00Z",
+          updatedAt: "2026-05-01T08:10:00Z",
+          customFields: [
+            {
+              fieldId: 2000000,
+              name: "Test Step Results",
+              type: "TableFieldValue",
+              values: [
+                [
+                  { fieldId: 2000001, name: "Action", value: "Open login page", type: "WikiTextFieldValue" },
+                  { fieldId: 2000002, name: "Expected result", value: "Login form appears", type: "WikiTextFieldValue" },
+                  { fieldId: 2000003, name: "Critical", value: true, type: "BoolFieldValue" },
+                  { fieldId: 2000004, name: "Actual result", value: "Login form appears", type: "WikiTextFieldValue" },
+                  { fieldId: 2000005, name: "Result", value: "Passed", type: "ChoiceFieldValue" },
+                ],
+              ],
+            },
+          ],
+        }),
+      );
+    }
     return HttpResponse.json(makeItem({ id }));
   }),
 
