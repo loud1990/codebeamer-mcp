@@ -252,6 +252,18 @@ export class CodebeamerClient {
     return this.http.get(`/items/${id}`, { resource: `item ${id}` });
   }
 
+  async getItemChildren(
+    itemId: number,
+    page: number,
+    pageSize: number,
+  ): Promise<CbReference[]> {
+    const raw = await this.http.get<unknown>(`/items/${itemId}/children`, {
+      params: { page, pageSize },
+      resource: `children for item ${itemId}`,
+    });
+    return toArray(raw);
+  }
+
   async listTrackerItems(
     trackerId: number,
     page: number,

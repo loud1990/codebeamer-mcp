@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CodebeamerClient } from "../client/codebeamer-client.js";
 import {
+  formatItemChildren,
   formatRelations,
   formatReferences,
   formatComments,
@@ -12,6 +13,40 @@ export function registerItemDetailTools(
   server: McpServer,
   client: CodebeamerClient,
 ): void {
+  server.registerTool(
+    "get_item_children",
+    {
+      title: "Get Item Children",
+      description:
+        "Get the immediate child tracker items for a Codebeamer item. " +
+        "Returns child item references in Codebeamer outline order; does not recurse into descendants.",
+      inputSchema: {
+        itemId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Numeric parent item ID"),
+        page: z
+          .number()
+          .int()
+          .min(1)
+          .default(1)
+          .describe("Page number (starts at 1)"),
+        pageSize: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(25)
+          .describe("Items per page (max 50)"),
+      },
+    },
+    async ({ itemId, page, pageSize }) => {
+      const children = await client.getItemChildren(itemId, page, pageSize);
+      return { content: [{ type: "text", text: formatItemChildren(children) }] };
+    },
+  );
+
   server.registerTool(
     "get_item_relations",
     {

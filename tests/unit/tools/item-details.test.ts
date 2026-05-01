@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { HttpClient } from "../../../src/client/http-client.js";
 import { CodebeamerClient } from "../../../src/client/codebeamer-client.js";
 import {
+  formatItemChildren,
   formatRelations,
   formatReferences,
   formatComments,
@@ -17,6 +18,26 @@ function makeClient() {
   });
   return new CodebeamerClient(http);
 }
+
+describe("get_item_children", () => {
+  it("returns formatted immediate child references", async () => {
+    const client = makeClient();
+    const children = await client.getItemChildren(500, 1, 25);
+    const text = formatItemChildren(children);
+
+    expect(text).toContain("## Child Items (2)");
+    expect(text).toContain("| 510 | Login child requirement | TrackerItemReference |");
+    expect(text).toContain("| 511 | Login child test case | TestCaseReference |");
+  });
+
+  it("returns an empty message when there are no children", async () => {
+    const client = makeClient();
+    const children = await client.getItemChildren(999, 1, 25);
+    const text = formatItemChildren(children);
+
+    expect(text).toBe("_No child items found._");
+  });
+});
 
 describe("get_item_relations", () => {
   it("returns formatted associations", async () => {

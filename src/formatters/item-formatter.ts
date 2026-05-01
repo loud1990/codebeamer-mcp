@@ -1,4 +1,5 @@
 import type {
+  CbReference,
   CbItem,
   CbItemRelationsPage,
   CbComment,
@@ -106,6 +107,22 @@ export function formatItem(item: CbItem): string {
   }
 
   return lines.join("\n");
+}
+
+export function formatItemChildren(children: CbReference[]): string {
+  if (children.length === 0) return "_No child items found._";
+
+  const rows = children.map(
+    (child) => `| ${child.id} | ${child.name} | ${child.type ?? "-"} |`,
+  );
+
+  return [
+    `## Child Items (${children.length})`,
+    "",
+    "| ID | Name | Type |",
+    "|----|------|------|",
+    ...rows,
+  ].join("\n");
 }
 
 function formatFieldValue(value: unknown): string {
