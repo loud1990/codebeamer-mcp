@@ -7,12 +7,35 @@ import {
   formatReferences,
   formatComments,
   formatReviews,
+  formatItemFields,
 } from "../formatters/item-formatter.js";
 
 export function registerItemDetailTools(
   server: McpServer,
   client: CodebeamerClient,
 ): void {
+  server.registerTool(
+    "get_item_fields",
+    {
+      title: "Get Item Fields",
+      description:
+        "Get all field values for a Codebeamer work item in FieldValue format. " +
+        "Returns editable and read-only field groups when provided by Codebeamer, " +
+        "including field IDs and value model types needed for custom-field updates.",
+      inputSchema: {
+        itemId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Numeric item ID"),
+      },
+    },
+    async ({ itemId }) => {
+      const fields = await client.getItemFields(itemId);
+      return { content: [{ type: "text", text: formatItemFields(fields) }] };
+    },
+  );
+
   server.registerTool(
     "get_item_children",
     {

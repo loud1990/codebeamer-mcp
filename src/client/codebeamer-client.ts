@@ -158,6 +158,12 @@ export interface CbEditableField {
   type?: string;
 }
 
+export interface CbItemFieldsPage {
+  editableFields?: CbEditableField[];
+  readOnlyFields?: CbEditableField[];
+  fields?: CbEditableField[];
+}
+
 export interface CbCreateCommentRequest {
   comment: string;
   commentFormat?: string;
@@ -372,11 +378,14 @@ export class CodebeamerClient {
     });
   }
 
+  getItemFields(id: number): Promise<CbItemFieldsPage> {
+    return this.http.get(`/items/${id}/fields`, {
+      resource: `fields for item ${id}`,
+    });
+  }
+
   async getItemEditableFields(id: number): Promise<CbEditableField[]> {
-    const raw = await this.http.get<{ editableFields?: CbEditableField[] }>(
-      `/items/${id}/fields`,
-      { resource: `editable fields for item ${id}` },
-    );
+    const raw = await this.getItemFields(id);
     return raw.editableFields ?? [];
   }
 

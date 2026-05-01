@@ -60,6 +60,33 @@ export const handlers = [
     HttpResponse.json([makeComment(), makeComment({ id: 301, comment: "Fixed in v2.1", createdBy: { id: 2, name: "jane.smith" } })]),
   ),
 
+  http.get(`${BASE}/items/:id/fields`, () =>
+    HttpResponse.json({
+      editableFields: [
+        {
+          fieldId: 3,
+          name: "Summary",
+          type: "TextFieldValue",
+          value: "Login button does not respond",
+        },
+        {
+          fieldId: 5,
+          name: "Assigned to",
+          type: "ChoiceFieldValue",
+          values: [{ id: 1, name: "john.doe", type: "UserReference" }],
+        },
+      ],
+      readOnlyFields: [
+        {
+          fieldId: 0,
+          name: "ID",
+          type: "IntegerFieldValue",
+          value: 500,
+        },
+      ],
+    }),
+  ),
+
   http.get(`${BASE}/items/:id`, ({ params }) => {
     const id = Number(params.id);
     if (id === 700) return HttpResponse.json(makeTestCaseItem());

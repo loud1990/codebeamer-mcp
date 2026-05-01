@@ -5,6 +5,8 @@ import type {
   CbComment,
   CbTrackerItemReview,
   CbTestStep,
+  CbEditableField,
+  CbItemFieldsPage,
 } from "../client/codebeamer-client.js";
 
 export function formatItemList(items: CbItem[]): string {
@@ -237,4 +239,50 @@ export function formatComments(comments: CbComment[]): string {
   );
 
   return [`## Comments (${comments.length})`, "", ...formatted].join("\n\n");
+}
+
+export function formatItemFields(page: CbItemFieldsPage): string {
+  const editable = page.editableFields ?? [];
+  const readOnly = page.readOnlyFields ?? [];
+  const fields = page.fields ?? [];
+  const total = editable.length + readOnly.length + fields.length;
+
+  if (total === 0) return "_No item fields found._";
+
+  const lines: string[] = [`## Item Fields (${total})`];
+
+  if (editable.length > 0) {
+    lines.push("", `### Editable Fields (${editable.length})`, "", ...fieldTable(editable));
+  }
+
+  if (readOnly.length > 0) {
+    lines.push("", `### Read-Only Fields (${readOnly.length})`, "", ...fieldTable(readOnly));
+  }
+
+  if (fields.length > 0) {
+    lines.push("", `### Fields (${fields.length})`, "", ...fieldTable(fields));
+  }
+
+  return lines.join("\n");
+}
+
+function fieldTable(fields: CbEditableField[]): string[] {
+  return [
+    "| Field ID | Name | Type | Value |",
+    "|----------|------|------|-------|",
+    ...fields.map(
+      (field) =>
+        `| ${field.fieldId} | ${field.name} | ${field.type ?? "-"} | ${formatEditableFieldValue(field)} |`,
+    ),
+  ];
+}
+
+function formatEditableFieldValue(field: CbEditableField): string {
+  if (field.values && field.values.length > 0) {
+    return field.values
+      .map((v) => v.name ? `[${v.id}] ${v.name}` : String(v.id))
+      .join(", ");
+  }
+
+  return formatFieldValue(field.value);
 }

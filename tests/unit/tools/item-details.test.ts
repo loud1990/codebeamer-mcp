@@ -6,6 +6,7 @@ import {
   formatRelations,
   formatReferences,
   formatComments,
+  formatItemFields,
 } from "../../../src/formatters/item-formatter.js";
 
 const BASE = "https://test-cb.example.com/v3";
@@ -36,6 +37,21 @@ describe("get_item_children", () => {
     const text = formatItemChildren(children);
 
     expect(text).toBe("_No child items found._");
+  });
+});
+
+describe("get_item_fields", () => {
+  it("returns formatted editable and read-only fields", async () => {
+    const client = makeClient();
+    const fields = await client.getItemFields(500);
+    const text = formatItemFields(fields);
+
+    expect(text).toContain("## Item Fields (3)");
+    expect(text).toContain("### Editable Fields (2)");
+    expect(text).toContain("| 3 | Summary | TextFieldValue | Login button does not respond |");
+    expect(text).toContain("| 5 | Assigned to | ChoiceFieldValue | [1] john.doe |");
+    expect(text).toContain("### Read-Only Fields (1)");
+    expect(text).toContain("| 0 | ID | IntegerFieldValue | 500 |");
   });
 });
 
