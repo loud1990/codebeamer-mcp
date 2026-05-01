@@ -5,6 +5,7 @@ import {
   formatTrackerList,
   formatTracker,
   formatTrackerField,
+  formatTrackerRootChildren,
 } from "../formatters/tracker-formatter.js";
 
 export function registerTrackerTools(
@@ -69,6 +70,42 @@ export function registerTrackerTools(
       ]);
       return {
         content: [{ type: "text", text: formatTracker(tracker, fields, items) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_tracker_root_children",
+    {
+      title: "Get Tracker Root Children",
+      description:
+        "Get the root-level outline items for a Codebeamer tracker. " +
+        "Returns top-level item references in Codebeamer outline order; use get_item_children to expand a returned item.",
+      inputSchema: {
+        trackerId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Numeric tracker ID"),
+        page: z
+          .number()
+          .int()
+          .min(1)
+          .default(1)
+          .describe("Page number (starts at 1)"),
+        pageSize: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(25)
+          .describe("Items per page (max 50)"),
+      },
+    },
+    async ({ trackerId, page, pageSize }) => {
+      const children = await client.getTrackerRootChildren(trackerId, page, pageSize);
+      return {
+        content: [{ type: "text", text: formatTrackerRootChildren(children) }],
       };
     },
   );

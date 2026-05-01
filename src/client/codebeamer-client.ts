@@ -262,6 +262,18 @@ export class CodebeamerClient {
     });
   }
 
+  async getTrackerRootChildren(
+    trackerId: number,
+    page: number,
+    pageSize: number,
+  ): Promise<CbReference[]> {
+    const raw = await this.http.get<unknown>(`/trackers/${trackerId}/children`, {
+      params: { page, pageSize },
+      resource: `root children for tracker ${trackerId}`,
+    });
+    return toArray(raw);
+  }
+
   getTrackerSchema(id: number): Promise<CbTrackerSchemaField[]> {
     return this.http.get(`/trackers/${id}/schema`, {
       resource: `schema for tracker ${id}`,

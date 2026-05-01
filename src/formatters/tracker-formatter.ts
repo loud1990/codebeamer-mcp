@@ -2,6 +2,7 @@ import type {
   CbTracker,
   CbTrackerField,
   CbItem,
+  CbReference,
 } from "../client/codebeamer-client.js";
 
 export function formatTrackerList(trackers: CbTracker[]): string {
@@ -75,6 +76,22 @@ export function formatTracker(
   }
 
   return lines.join("\n");
+}
+
+export function formatTrackerRootChildren(children: CbReference[]): string {
+  if (children.length === 0) return "_No root-level outline items found._";
+
+  const rows = children.map(
+    (child) => `| ${child.id} | ${child.name} | ${child.type ?? "-"} |`,
+  );
+
+  return [
+    `## Tracker Root Children (${children.length})`,
+    "",
+    "| ID | Name | Type |",
+    "|----|------|------|",
+    ...rows,
+  ].join("\n");
 }
 
 function formatScalar(value: unknown): string {

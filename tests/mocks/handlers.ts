@@ -36,6 +36,17 @@ export const handlers = [
     HttpResponse.json([makeItem()]),
   ),
 
+  http.get(`${BASE}/trackers/:id/children`, ({ params }) => {
+    const id = Number(params.id);
+    if (id === 999) return HttpResponse.json({ itemRefs: [] });
+    return HttpResponse.json({
+      itemRefs: [
+        makeItemChild({ id: 520, name: "Root requirement folder", type: "TrackerItemReference" }),
+        makeItemChild({ id: 521, name: "Root test folder", type: "TrackerItemReference" }),
+      ],
+    });
+  }),
+
   http.get(`${BASE}/trackers/:id`, ({ params }) =>
     HttpResponse.json(makeTracker({ id: Number(params.id) })),
   ),
