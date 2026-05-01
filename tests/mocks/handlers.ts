@@ -48,12 +48,57 @@ export const handlers = [
     HttpResponse.json(makeDetailedTrackerField({ fieldId: Number(params.fieldId) })),
   ),
 
-  http.get(`${BASE}/trackers/:id/fields`, () =>
-    HttpResponse.json([
+  http.get(`${BASE}/trackers/:id/fields`, ({ params }) => {
+    const id = Number(params.id);
+    if (id === 301) {
+      return HttpResponse.json([
+        makeTrackerField({
+          fieldId: 1000,
+          name: "Run Date",
+          type: "DateFieldValue",
+          valueModel: "DateFieldValue",
+          trackerItemField: "customFields",
+          legacyRestName: "runDate",
+          required: true,
+        }),
+        makeTrackerField({
+          fieldId: 1001,
+          name: "Passed Count",
+          type: "IntegerFieldValue",
+          valueModel: "IntegerFieldValue",
+          trackerItemField: "customFields",
+          legacyRestName: "passedCount",
+          required: true,
+        }),
+        makeTrackerField({
+          fieldId: 1002,
+          name: "Failed Count",
+          type: "IntegerFieldValue",
+          valueModel: "IntegerFieldValue",
+          trackerItemField: "customFields",
+          legacyRestName: "failedCount",
+          required: true,
+        }),
+        makeTrackerField({
+          fieldId: 1003,
+          name: "Overall Result",
+          type: "ChoiceFieldValue",
+          valueModel: "ChoiceFieldValue",
+          trackerItemField: "customFields",
+          legacyRestName: "overallResult",
+          required: true,
+          options: [
+            { id: 10, name: "Passed" },
+            { id: 11, name: "Failed" },
+          ],
+        }),
+      ]);
+    }
+    return HttpResponse.json([
       makeTrackerField(),
       makeTrackerField({ fieldId: 2, name: "Description", type: "WikiTextFieldValue", required: false }),
-    ]),
-  ),
+    ]);
+  }),
 
   http.get(`${BASE}/trackers/:id/items`, () =>
     HttpResponse.json([makeItem()]),
@@ -148,8 +193,39 @@ export const handlers = [
     HttpResponse.json([makeComment(), makeComment({ id: 301, comment: "Fixed in v2.1", createdBy: { id: 2, name: "jane.smith" } })]),
   ),
 
-  http.get(`${BASE}/items/:id/fields`, () =>
-    HttpResponse.json({
+  http.get(`${BASE}/items/:id/fields`, ({ params }) => {
+    const id = Number(params.id);
+    if (id === 950) {
+      return HttpResponse.json({
+        editableFields: [
+          {
+            fieldId: 1000,
+            name: "Run Date",
+            type: "DateFieldValue",
+            value: "2026-05-01",
+          },
+          {
+            fieldId: 1001,
+            name: "Passed Count",
+            type: "IntegerFieldValue",
+            value: 12,
+          },
+          {
+            fieldId: 1002,
+            name: "Failed Count",
+            type: "IntegerFieldValue",
+            value: 1,
+          },
+          {
+            fieldId: 1003,
+            name: "Overall Result",
+            type: "ChoiceFieldValue",
+            values: [{ id: 11, name: "Failed", type: "ChoiceOptionReference" }],
+          },
+        ],
+      });
+    }
+    return HttpResponse.json({
       editableFields: [
         {
           fieldId: 3,
@@ -172,8 +248,8 @@ export const handlers = [
           value: 500,
         },
       ],
-    }),
-  ),
+    });
+  }),
 
   http.get(`${BASE}/items/:id`, ({ params }) => {
     const id = Number(params.id);
@@ -230,6 +306,39 @@ export const handlers = [
         }),
       );
     }
+    if (id === 600) {
+      return HttpResponse.json(
+        makeItem({
+          id,
+          name: "Daily Test Log - 2026-05-01 - Daily Test Project",
+          tracker: { id: 301, name: "Test Logs" },
+          project: { id: 77, name: "Daily Test Project" },
+          description: "# Daily Test Report\n\nEverything passed.",
+          customFields: [
+            { fieldId: 1000, name: "Run Date", type: "DateFieldValue", value: "2026-05-01" },
+            { fieldId: 1001, name: "Passed Count", type: "IntegerFieldValue", value: 12 },
+            { fieldId: 1002, name: "Failed Count", type: "IntegerFieldValue", value: 0 },
+            {
+              fieldId: 1003,
+              name: "Overall Result",
+              type: "ChoiceFieldValue",
+              values: [{ id: 10, name: "Passed", type: "ChoiceOptionReference" }],
+            },
+          ],
+        }),
+      );
+    }
+    if (id === 950) {
+      return HttpResponse.json(
+        makeItem({
+          id,
+          name: "Manual Daily Test Log",
+          tracker: { id: 301, name: "Test Logs" },
+          project: { id: 77, name: "Daily Test Project" },
+          description: "# Manual Daily Test Report",
+        }),
+      );
+    }
     return HttpResponse.json(makeItem({ id }));
   }),
 
@@ -251,6 +360,7 @@ export const handlers = [
         status: body.status as { id: number; name: string } | undefined,
         priority: body.priority as { id: number; name: string } | undefined,
         storyPoints: body.storyPoints as number | undefined,
+        customFields: body.customFields as NonNullable<ReturnType<typeof makeItem>["customFields"]> | undefined,
       }),
       { status: 201 },
     );

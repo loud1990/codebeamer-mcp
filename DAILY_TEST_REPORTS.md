@@ -148,8 +148,30 @@ Inputs:
 | `priorityId` | Optional priority. |
 | `assignedToIds` | Optional assignees. |
 | `parentId` | Optional parent item for nesting. |
+| `customFields` | Optional typed Codebeamer custom field payloads discovered from manual logs. |
 
 The write tool should not regenerate the report. It should create exactly the report the user reviewed or provided.
+
+### `analyze_test_log_schema`
+
+Read-only tool.
+
+Inputs:
+
+| Input | Purpose |
+|---|---|
+| `testLogTrackerId` | Test Log tracker ID to inspect. |
+| `exampleItemIds` | Known-good manually created Test Log item IDs. |
+
+Output:
+
+- required tracker fields
+- fields populated in the manual examples
+- sample values and option references from examples
+- suggested `customFields` payload fragment for `create_daily_test_log`
+- warnings for required fields that were not populated in the examples
+
+Use this before automating Test Log creation when the Test Log tracker has custom fields.
 
 ## Why Two Tools
 
@@ -159,6 +181,7 @@ Splitting the workflow is safer and easier to audit:
 - The user can review the exact report before anything is written.
 - `create_daily_test_log` has a narrow responsibility and clear write behavior.
 - Failures in Test Log creation do not affect report generation.
+- `analyze_test_log_schema` uses existing manual logs as ground truth before custom fields are automated.
 
 ## Best Implementation Notes
 
@@ -170,6 +193,7 @@ Splitting the workflow is safer and easier to audit:
 - Use `modifiedAt` by default for daily execution reports.
 - Keep generated reports deterministic: sort projects by name/ID and preserve Codebeamer child order.
 - Avoid fetching comments, relations, reviews, or traceability by default. Add those only if the user asks for audit-level detail.
+- For Test Log custom fields, run `analyze_test_log_schema` against one or more manually created logs, then pass the adjusted `customFields` payload into `create_daily_test_log`.
 
 ## Report Skeleton
 
@@ -202,4 +226,3 @@ Tracker: Test Runs (ID: 123)
 | Item | Step | Action | Expected | Actual | Result |
 |---:|---:|---|---|---|---|
 ```
-

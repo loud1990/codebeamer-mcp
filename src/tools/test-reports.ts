@@ -5,16 +5,34 @@ import type {
   CbProject,
   CbReference,
   CbTracker,
+  CbTrackerField,
   CodebeamerClient,
 } from "../client/codebeamer-client.js";
 import { formatItem } from "../formatters/item-formatter.js";
 import {
   formatDailyTestReport,
+  formatTestLogSchemaAnalysis,
   type DailyTestReport,
+  type ObservedTestLogField,
   type ProjectDailyTestReport,
+  type TestLogSchemaAnalysis,
   type TestReportNode,
   type TestStepResult,
 } from "../formatters/test-report-formatter.js";
+
+interface TestLogCustomFieldInput {
+  fieldId: number;
+  type: string;
+  value?: unknown;
+  values?: unknown[];
+}
+
+interface CreatedDailyTestLog {
+  item: CbItem;
+  readback: CbItem;
+  missingFieldIds: number[];
+  mismatchedFieldIds: number[];
+}
 
 interface DateWindow {
   start: string;
@@ -68,6 +86,30 @@ function formatUnknownValue(value: unknown): string | undefined {
     return String((value as { name: unknown }).name);
   }
   return String(value);
+}
+
+function fieldHasValue(field: { value?: unknown; values?: unknown[] }): boolean {
+  if (field.values !== undefined) return field.values.length > 0;
+  if (field.value === undefined || field.value === null) return false;
+  if (typeof field.value === "string") return field.value.trim().length > 0;
+  return true;
+}
+
+function comparableJson(value: unknown): string {
+  return JSON.stringify(value ?? null);
+}
+
+function fieldValueMatches(
+  expected: TestLogCustomFieldInput,
+  actual: { value?: unknown; values?: unknown[] },
+): boolean {
+  if (expected.values !== undefined) {
+    return comparableJson(actual.values) === comparableJson(expected.values);
+  }
+  if (expected.value !== undefined) {
+    return comparableJson(actual.value) === comparableJson(expected.value);
+  }
+  return true;
 }
 
 function extractResult(item: CbItem): string | undefined {
@@ -305,6 +347,101 @@ export async function generateDailyTestReport(
   };
 }
 
+function mergeObservedField(
+  observedById: Map<number, ObservedTestLogField>,
+  exampleItemId: number,
+  field: { fieldId: number; name: string; type?: string; value?: unknown; values?: unknown[] },
+): void {
+  const existing = observedById.get(field.fieldId);
+  if (existing) {
+    existing.exampleItemIds.push(exampleItemId);
+    if (existing.sampleValue === undefined && field.value !== undefined) {
+      existing.sampleValue = field.value;
+    }
+    if (existing.sampleValues === undefined && field.values !== undefined) {
+      existing.sampleValues = field.values;
+    }
+    return;
+  }
+
+  observedById.set(field.fieldId, {
+    fieldId: field.fieldId,
+    name: field.name,
+    type: field.type,
+    exampleItemIds: [exampleItemId],
+    sampleValue: field.value,
+    sampleValues: field.values,
+  });
+}
+
+function suggestedType(field: CbTrackerField, observed?: ObservedTestLogField): string {
+  return observed?.type ?? field.valueModel ?? field.type ?? "TextFieldValue";
+}
+
+function createSuggestedCustomFields(
+  fields: CbTrackerField[],
+  observedFields: ObservedTestLogField[],
+): TestLogCustomFieldInput[] {
+  const observedById = new Map(observedFields.map((field) => [field.fieldId, field]));
+  const supported = fields.filter((field) => field.trackerItemField === "customFields" || field.fieldId >= 1000);
+  return supported
+    .filter((field) => field.required || observedById.has(field.fieldId))
+    .map((field) => {
+      const observed = observedById.get(field.fieldId);
+      const customField: TestLogCustomFieldInput = {
+        fieldId: field.fieldId,
+        type: suggestedType(field, observed),
+      };
+      if (observed?.sampleValues !== undefined) customField.values = observed.sampleValues;
+      else if (observed?.sampleValue !== undefined) customField.value = observed.sampleValue;
+      return customField;
+    });
+}
+
+export async function analyzeTestLogSchema(
+  client: CodebeamerClient,
+  options: {
+    testLogTrackerId: number;
+    exampleItemIds: number[];
+  },
+): Promise<TestLogSchemaAnalysis> {
+  const [tracker, fields] = await Promise.all([
+    client.getTracker(options.testLogTrackerId),
+    client.getTrackerFields(options.testLogTrackerId),
+  ]);
+  const observedById = new Map<number, ObservedTestLogField>();
+
+  for (const exampleItemId of options.exampleItemIds) {
+    const fieldPage = await client.getItemFields(exampleItemId);
+    const allFields = [
+      ...(fieldPage.editableFields ?? []),
+      ...(fieldPage.readOnlyFields ?? []),
+      ...(fieldPage.fields ?? []),
+    ];
+    for (const field of allFields) {
+      if (field.fieldId <= 0) continue;
+      if (!fieldHasValue(field)) continue;
+      mergeObservedField(observedById, exampleItemId, field);
+    }
+  }
+
+  const observedFields = [...observedById.values()].sort((a, b) => a.fieldId - b.fieldId);
+  const requiredFields = fields.filter((field) => field.required);
+  const observedFieldIds = new Set(observedFields.map((field) => field.fieldId));
+  const warnings = requiredFields
+    .filter((field) => !observedFieldIds.has(field.fieldId))
+    .map((field) => `Required field ${field.name} (${field.fieldId}) was not populated in the example items.`);
+
+  return {
+    tracker,
+    fields,
+    observedFields,
+    requiredFields,
+    suggestedCustomFields: createSuggestedCustomFields(fields, observedFields),
+    warnings,
+  };
+}
+
 export async function createDailyTestLog(
   client: CodebeamerClient,
   options: {
@@ -317,10 +454,11 @@ export async function createDailyTestLog(
     priorityId?: number;
     assignedToIds?: number[];
     parentId?: number;
+    customFields?: TestLogCustomFieldInput[];
   },
-): Promise<CbItem> {
+): Promise<CreatedDailyTestLog> {
   const project = await client.getProject(options.projectId);
-  return client.createItem(
+  const item = await client.createItem(
     options.testLogTrackerId,
     {
       name: options.name ?? `Daily Test Log - ${options.date} - ${project.name}`,
@@ -330,9 +468,24 @@ export async function createDailyTestLog(
       ...(options.assignedToIds !== undefined
         ? { assignedTo: options.assignedToIds.map((id) => ({ id })) }
         : {}),
+      ...(options.customFields !== undefined ? { customFields: options.customFields } : {}),
     },
     options.parentId,
   );
+  const readback = await client.getItem(item.id);
+  const readbackFieldsById = new Map(
+    readback.customFields?.map((field) => [field.fieldId, field]) ?? [],
+  );
+  const missingFieldIds = (options.customFields ?? [])
+    .map((field) => field.fieldId)
+    .filter((fieldId) => !readbackFieldsById.has(fieldId));
+  const mismatchedFieldIds = (options.customFields ?? [])
+    .filter((field) => {
+      const readbackField = readbackFieldsById.get(field.fieldId);
+      return readbackField !== undefined && !fieldValueMatches(field, readbackField);
+    })
+    .map((field) => field.fieldId);
+  return { item, readback, missingFieldIds, mismatchedFieldIds };
 }
 
 export function registerTestReportTools(
@@ -401,6 +554,36 @@ export function registerTestReportTools(
   );
 
   server.registerTool(
+    "analyze_test_log_schema",
+    {
+      title: "Analyze Test Log Schema",
+      description:
+        "Analyze a Test Log tracker and manually created example Test Log items. " +
+        "Returns required fields, observed populated fields, and a suggested customFields payload for create_daily_test_log.",
+      inputSchema: {
+        testLogTrackerId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Tracker ID of the Test Log tracker"),
+        exampleItemIds: z
+          .array(z.number().int().positive())
+          .min(1)
+          .describe("Known-good manually created Test Log item IDs to use as examples"),
+      },
+    },
+    async ({ testLogTrackerId, exampleItemIds }) => {
+      const analysis = await analyzeTestLogSchema(client, {
+        testLogTrackerId,
+        exampleItemIds,
+      });
+      return {
+        content: [{ type: "text", text: formatTestLogSchemaAnalysis(analysis) }],
+      };
+    },
+  );
+
+  server.registerTool(
     "create_daily_test_log",
     {
       title: "Create Daily Test Log",
@@ -453,10 +636,21 @@ export function registerTestReportTools(
           .positive()
           .optional()
           .describe("Optional parent item ID for nesting"),
+        customFields: z
+          .array(
+            z.object({
+              fieldId: z.number().int().positive(),
+              type: z.string().min(1),
+              value: z.unknown().optional(),
+              values: z.array(z.unknown()).optional(),
+            }),
+          )
+          .optional()
+          .describe("Optional Codebeamer custom field payloads. Use analyze_test_log_schema to discover field IDs and value models."),
       },
     },
-    async ({ projectId, testLogTrackerId, date, reportMarkdown, name, statusId, priorityId, assignedToIds, parentId }) => {
-      const item = await createDailyTestLog(client, {
+    async ({ projectId, testLogTrackerId, date, reportMarkdown, name, statusId, priorityId, assignedToIds, parentId, customFields }) => {
+      const result = await createDailyTestLog(client, {
         projectId,
         testLogTrackerId,
         date,
@@ -466,8 +660,26 @@ export function registerTestReportTools(
         priorityId,
         assignedToIds,
         parentId,
+        customFields,
       });
-      return { content: [{ type: "text", text: formatItem(item) }] };
+      const verificationMessages: string[] = [];
+      if (result.missingFieldIds.length > 0) {
+        verificationMessages.push(`Missing custom field IDs on readback: ${result.missingFieldIds.join(", ")}`);
+      }
+      if (result.mismatchedFieldIds.length > 0) {
+        verificationMessages.push(`Custom field values differed on readback: ${result.mismatchedFieldIds.join(", ")}`);
+      }
+      const verification = verificationMessages.length === 0
+        ? "All provided custom field IDs and values were present on readback."
+        : verificationMessages.join(" ");
+      return {
+        content: [
+          {
+            type: "text",
+            text: `${formatItem(result.readback)}\n\n---\n**Readback verification:** ${verification}`,
+          },
+        ],
+      };
     },
   );
 }

@@ -1,7 +1,9 @@
 import type {
+  CbEditableField,
   CbItem,
   CbProject,
   CbTracker,
+  CbTrackerField,
 } from "../client/codebeamer-client.js";
 
 export interface TestStepResult {
@@ -35,6 +37,29 @@ export interface DailyTestReport {
   start: string;
   end: string;
   projects: ProjectDailyTestReport[];
+}
+
+export interface ObservedTestLogField {
+  fieldId: number;
+  name: string;
+  type?: string;
+  exampleItemIds: number[];
+  sampleValue?: unknown;
+  sampleValues?: unknown[];
+}
+
+export interface TestLogSchemaAnalysis {
+  tracker: CbTracker;
+  fields: CbTrackerField[];
+  observedFields: ObservedTestLogField[];
+  requiredFields: CbTrackerField[];
+  suggestedCustomFields: Array<{
+    fieldId: number;
+    type: string;
+    value?: unknown;
+    values?: unknown[];
+  }>;
+  warnings: string[];
 }
 
 interface Counts {
@@ -203,3 +228,90 @@ export function formatDailyTestReport(report: DailyTestReport): string {
   return lines.join("\n").trimEnd();
 }
 
+function formatSampleValue(field: ObservedTestLogField): string {
+  const value = field.sampleValues ?? field.sampleValue;
+  if (value === undefined || value === null) return "-";
+  if (Array.isArray(value)) return value.map((entry) => escapeCell(describeUnknown(entry))).join(", ");
+  return escapeCell(describeUnknown(value));
+}
+
+function describeUnknown(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "-";
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (Array.isArray(value)) return value.map(describeUnknown).join(", ");
+  if (typeof value === "object" && "name" in value) {
+    const ref = value as { id?: unknown; name?: unknown; type?: unknown };
+    return `[${ref.id ?? "?"}] ${ref.name ?? "?"}${ref.type ? ` (${ref.type})` : ""}`;
+  }
+  return JSON.stringify(value);
+}
+
+function fieldType(field: CbTrackerField, observed?: ObservedTestLogField): string {
+  return observed?.type ?? field.valueModel ?? field.type ?? "-";
+}
+
+function suggestedPayloadJson(analysis: TestLogSchemaAnalysis): string {
+  return JSON.stringify({ customFields: analysis.suggestedCustomFields }, null, 2);
+}
+
+export function formatTestLogSchemaAnalysis(analysis: TestLogSchemaAnalysis): string {
+  const observedById = new Map(
+    analysis.observedFields.map((field) => [field.fieldId, field]),
+  );
+  const lines: string[] = [
+    `# Test Log Schema Analysis - ${analysis.tracker.name} (${analysis.tracker.id})`,
+    "",
+    `- **Project:** ${analysis.tracker.project?.name ?? "?"} (${analysis.tracker.project?.id ?? "?"})`,
+    `- **Tracker type:** ${analysis.tracker.type?.name ?? "?"}`,
+    `- **Required fields found:** ${analysis.requiredFields.length}`,
+    `- **Observed custom fields:** ${analysis.observedFields.length}`,
+  ];
+
+  if (analysis.warnings.length > 0) {
+    lines.push("", "## Warnings", "");
+    for (const warning of analysis.warnings) {
+      lines.push(`- ${warning}`);
+    }
+  }
+
+  lines.push(
+    "",
+    "## Fields",
+    "",
+    "| Field ID | Name | Type | Required | Tracker item field | Legacy REST name | Observed in examples | Sample value |",
+    "|---:|---|---|---|---|---|---|---|",
+  );
+
+  for (const field of analysis.fields) {
+    const observed = observedById.get(field.fieldId);
+    lines.push(
+      `| ${field.fieldId} | ${escapeCell(field.name)} | ${escapeCell(fieldType(field, observed))} | ${field.required ? "Yes" : "No"} | ${escapeCell(field.trackerItemField)} | ${escapeCell(field.legacyRestName)} | ${observed ? observed.exampleItemIds.join(", ") : "-"} | ${observed ? formatSampleValue(observed) : "-"} |`,
+    );
+  }
+
+  lines.push(
+    "",
+    "## Suggested Create Payload Fragment",
+    "",
+    "Use this as the `customFields` input for `create_daily_test_log`, then adjust values for the target date/report.",
+    "",
+    "```json",
+    suggestedPayloadJson(analysis),
+    "```",
+  );
+
+  return lines.join("\n");
+}
+
+export function flattenItemFields(fields: CbEditableField[]): ObservedTestLogField[] {
+  return fields.map((field) => ({
+    fieldId: field.fieldId,
+    name: field.name,
+    type: field.type,
+    exampleItemIds: [],
+    sampleValue: field.value,
+    sampleValues: field.values,
+  }));
+}

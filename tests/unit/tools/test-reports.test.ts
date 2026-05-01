@@ -2,10 +2,14 @@ import { describe, it, expect } from "vitest";
 import { HttpClient } from "../../../src/client/http-client.js";
 import { CodebeamerClient } from "../../../src/client/codebeamer-client.js";
 import {
+  analyzeTestLogSchema,
   createDailyTestLog,
   generateDailyTestReport,
 } from "../../../src/tools/test-reports.js";
-import { formatDailyTestReport } from "../../../src/formatters/test-report-formatter.js";
+import {
+  formatDailyTestReport,
+  formatTestLogSchemaAnalysis,
+} from "../../../src/formatters/test-report-formatter.js";
 
 const BASE = "https://test-cb.example.com/v3";
 
@@ -57,18 +61,54 @@ describe("generate_daily_test_report", () => {
   });
 });
 
+describe("analyze_test_log_schema", () => {
+  it("uses manual Test Log examples to suggest custom field payloads", async () => {
+    const client = makeClient();
+    const analysis = await analyzeTestLogSchema(client, {
+      testLogTrackerId: 301,
+      exampleItemIds: [950],
+    });
+    const text = formatTestLogSchemaAnalysis(analysis);
+
+    expect(analysis.requiredFields).toHaveLength(4);
+    expect(analysis.suggestedCustomFields).toEqual([
+      { fieldId: 1000, type: "DateFieldValue", value: "2026-05-01" },
+      { fieldId: 1001, type: "IntegerFieldValue", value: 12 },
+      { fieldId: 1002, type: "IntegerFieldValue", value: 1 },
+      {
+        fieldId: 1003,
+        type: "ChoiceFieldValue",
+        values: [{ id: 11, name: "Failed", type: "ChoiceOptionReference" }],
+      },
+    ]);
+    expect(text).toContain("Run Date");
+    expect(text).toContain("Suggested Create Payload Fragment");
+  });
+});
+
 describe("create_daily_test_log", () => {
   it("creates a Test Log item with a default daily title", async () => {
     const client = makeClient();
-    const item = await createDailyTestLog(client, {
+    const result = await createDailyTestLog(client, {
       projectId: 77,
       testLogTrackerId: 301,
       date: "2026-05-01",
       reportMarkdown: "# Daily Test Report\n\nEverything passed.",
+      customFields: [
+        { fieldId: 1000, type: "DateFieldValue", value: "2026-05-01" },
+        { fieldId: 1001, type: "IntegerFieldValue", value: 12 },
+        { fieldId: 1002, type: "IntegerFieldValue", value: 0 },
+        {
+          fieldId: 1003,
+          type: "ChoiceFieldValue",
+          values: [{ id: 10, name: "Passed", type: "ChoiceOptionReference" }],
+        },
+      ],
     });
 
-    expect(item.id).toBe(600);
-    expect(item.name).toBe("Daily Test Log - 2026-05-01 - Daily Test Project");
-    expect(item.description).toBe("# Daily Test Report\n\nEverything passed.");
+    expect(result.item.id).toBe(600);
+    expect(result.readback.name).toBe("Daily Test Log - 2026-05-01 - Daily Test Project");
+    expect(result.readback.description).toBe("# Daily Test Report\n\nEverything passed.");
+    expect(result.missingFieldIds).toEqual([]);
   });
 });

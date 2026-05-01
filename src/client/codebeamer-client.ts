@@ -146,7 +146,7 @@ export interface CbCreateItemRequest {
   priority?: { id: number };
   assignedTo?: Array<{ id: number }>;
   storyPoints?: number;
-  customFields?: Array<{ fieldId: number; type: string; value: unknown }>;
+  customFields?: Array<{ fieldId: number; type: string; value?: unknown; values?: unknown[] }>;
 }
 
 export interface CbUpdateItemRequest {
