@@ -4,6 +4,7 @@ import type { CodebeamerClient } from "../client/codebeamer-client.js";
 import {
   formatTrackerList,
   formatTracker,
+  formatTrackerField,
 } from "../formatters/tracker-formatter.js";
 
 export function registerTrackerTools(
@@ -68,6 +69,35 @@ export function registerTrackerTools(
       ]);
       return {
         content: [{ type: "text", text: formatTracker(tracker, fields, items) }],
+      };
+    },
+  );
+
+  server.registerTool(
+    "get_tracker_field",
+    {
+      title: "Get Tracker Field",
+      description:
+        "Get detailed metadata for a single Codebeamer tracker field. " +
+        "Use this before constructing write payloads because valueModel, legacyRestName, " +
+        "trackerItemField, options, table columns, and reference types define valid field values.",
+      inputSchema: {
+        trackerId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Numeric tracker ID"),
+        fieldId: z
+          .number()
+          .int()
+          .nonnegative()
+          .describe("Numeric tracker field ID"),
+      },
+    },
+    async ({ trackerId, fieldId }) => {
+      const field = await client.getTrackerField(trackerId, fieldId);
+      return {
+        content: [{ type: "text", text: formatTrackerField(field) }],
       };
     },
   );

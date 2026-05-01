@@ -4,6 +4,7 @@ import { CodebeamerClient } from "../../../src/client/codebeamer-client.js";
 import {
   formatTrackerList,
   formatTracker,
+  formatTrackerField,
 } from "../../../src/formatters/tracker-formatter.js";
 
 const BASE = "https://test-cb.example.com/v3";
@@ -47,5 +48,24 @@ describe("get_tracker", () => {
     expect(text).toContain("### Items");
     expect(text).toContain("Login button does not respond");
     expect(text).toContain("Open");
+  });
+});
+
+describe("get_tracker_field", () => {
+  it("returns formatted tracker field details used for write payloads", async () => {
+    const client = makeClient();
+    const field = await client.getTrackerField(100, 7);
+    const text = formatTrackerField(field);
+
+    expect(field.fieldId).toBe(7);
+    expect(text).toContain("Detected in release");
+    expect(text).toContain("ChoiceFieldValue");
+    expect(text).toContain("detectedInRelease");
+    expect(text).toContain("customFields");
+    expect(text).toContain("ReleaseReference");
+    expect(text).toContain("### Options");
+    expect(text).toContain("Release 1.0");
+    expect(text).toContain("### Columns");
+    expect(text).toContain("Expected result");
   });
 });

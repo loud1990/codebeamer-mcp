@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { makeProject } from "./fixtures/projects.js";
-import { makeTracker, makeTrackerField } from "./fixtures/trackers.js";
+import { makeTracker, makeTrackerField, makeDetailedTrackerField } from "./fixtures/trackers.js";
 import { makeItem, makeItemChild, makeItemRelationsPage, makeComment, makeTestCaseItem } from "./fixtures/items.js";
 import { makeUser } from "./fixtures/users.js";
 
@@ -19,6 +19,10 @@ export const handlers = [
   // Trackers
   http.get(`${BASE}/projects/:projectId/trackers`, () =>
     HttpResponse.json([makeTracker()]),
+  ),
+
+  http.get(`${BASE}/trackers/:id/fields/:fieldId`, ({ params }) =>
+    HttpResponse.json(makeDetailedTrackerField({ fieldId: Number(params.fieldId) })),
   ),
 
   http.get(`${BASE}/trackers/:id/fields`, () =>

@@ -34,6 +34,15 @@ export interface CbTrackerField {
   type?: string;
   required?: boolean;
   hidden?: boolean;
+  valueModel?: string;
+  trackerItemField?: string;
+  legacyRestName?: string;
+  options?: CbTrackerSchemaOption[];
+  columns?: CbTrackerField[];
+  referenceType?: string;
+  referenceTypes?: string[];
+  multipleValues?: boolean;
+  allowedValues?: Array<{ id: number; name?: string; type?: string }>;
 }
 
 export interface CbTrackerSchemaOption {
@@ -244,6 +253,12 @@ export class CodebeamerClient {
   getTrackerFields(id: number): Promise<CbTrackerField[]> {
     return this.http.get(`/trackers/${id}/fields`, {
       resource: `fields for tracker ${id}`,
+    });
+  }
+
+  getTrackerField(trackerId: number, fieldId: number): Promise<CbTrackerField> {
+    return this.http.get(`/trackers/${trackerId}/fields/${fieldId}`, {
+      resource: `field ${fieldId} for tracker ${trackerId}`,
     });
   }
 
