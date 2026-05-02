@@ -38,7 +38,7 @@ An MCP (Model Context Protocol) server for Codebeamer ALM. Allows Claude and oth
 | `create_association` | Create an association between two items (e.g. depends on, blocks) |
 | `create_reference` | Add a downstream traceability reference between two items |
 | `create_harm` | Create a harm entry in an RM Harms List tracker with IMDRF code and severity (1–5) |
-| `create_daily_test_log` | Create a Test Log item from a reviewed daily test report, including custom fields |
+| `create_daily_test_log` | Create a Test Log item from a reviewed daily test report, including ABC Test Log fields and custom fields |
 
 ## Installation
 

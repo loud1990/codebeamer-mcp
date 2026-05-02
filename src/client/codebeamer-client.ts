@@ -30,6 +30,7 @@ export interface CbTracker {
 
 export interface CbTrackerField {
   fieldId: number;
+  id?: number;
   name: string;
   type?: string;
   required?: boolean;
@@ -162,7 +163,7 @@ export interface CbUpdateItemRequest {
 export interface CbEditableField {
   fieldId: number;
   name: string;
-  values?: Array<{ id: number; name?: string; type?: string }>;
+  values?: unknown[];
   value?: unknown;
   type?: string;
 }
@@ -170,6 +171,7 @@ export interface CbEditableField {
 export interface CbItemFieldsPage {
   editableFields?: CbEditableField[];
   readOnlyFields?: CbEditableField[];
+  editableTableFields?: CbEditableField[];
   fields?: CbEditableField[];
 }
 
@@ -215,6 +217,30 @@ function toArray<T>(response: unknown): T[] {
   return [];
 }
 
+function normalizeTrackerField(raw: CbTrackerField & { id?: number }): CbTrackerField {
+  return {
+    ...raw,
+    fieldId: raw.fieldId ?? raw.id ?? 0,
+  };
+}
+
+function normalizeEditableField(raw: CbEditableField & { id?: number }): CbEditableField {
+  return {
+    ...raw,
+    fieldId: raw.fieldId ?? raw.id ?? 0,
+  };
+}
+
+function normalizeItemFieldsPage(raw: CbItemFieldsPage): CbItemFieldsPage {
+  return {
+    ...raw,
+    editableFields: raw.editableFields?.map(normalizeEditableField),
+    readOnlyFields: raw.readOnlyFields?.map(normalizeEditableField),
+    editableTableFields: raw.editableTableFields?.map(normalizeEditableField),
+    fields: raw.fields?.map(normalizeEditableField),
+  };
+}
+
 // --- Client ---
 
 export class CodebeamerClient {
@@ -250,10 +276,11 @@ export class CodebeamerClient {
     return this.http.get(`/trackers/${id}`, { resource: `tracker ${id}` });
   }
 
-  getTrackerFields(id: number): Promise<CbTrackerField[]> {
-    return this.http.get(`/trackers/${id}/fields`, {
+  async getTrackerFields(id: number): Promise<CbTrackerField[]> {
+    const raw = await this.http.get<unknown>(`/trackers/${id}/fields`, {
       resource: `fields for tracker ${id}`,
     });
+    return toArray<CbTrackerField & { id?: number }>(raw).map(normalizeTrackerField);
   }
 
   getTrackerField(trackerId: number, fieldId: number): Promise<CbTrackerField> {
@@ -405,10 +432,11 @@ export class CodebeamerClient {
     });
   }
 
-  getItemFields(id: number): Promise<CbItemFieldsPage> {
-    return this.http.get(`/items/${id}/fields`, {
+  async getItemFields(id: number): Promise<CbItemFieldsPage> {
+    const raw = await this.http.get<CbItemFieldsPage>(`/items/${id}/fields`, {
       resource: `fields for item ${id}`,
     });
+    return normalizeItemFieldsPage(raw);
   }
 
   async getItemEditableFields(id: number): Promise<CbEditableField[]> {
@@ -436,7 +464,13 @@ export class CodebeamerClient {
     const fields = await this.getItemEditableFields(toItemId);
     const currentField = fields.find((f) => f.fieldId === superordinateField.id);
     const existingValues = currentField?.values ?? [];
-    if (existingValues.some((v) => v.id === fromItemId)) return; // already linked
+    if (
+      existingValues.some(
+        (v) => v && typeof v === "object" && "id" in v && v.id === fromItemId,
+      )
+    ) {
+      return; // already linked
+    }
 
     const newValues = [...existingValues, { id: fromItemId, type: "TrackerItemReference" }];
 

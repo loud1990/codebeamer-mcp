@@ -280,7 +280,13 @@ function fieldTable(fields: CbEditableField[]): string[] {
 function formatEditableFieldValue(field: CbEditableField): string {
   if (field.values && field.values.length > 0) {
     return field.values
-      .map((v) => v.name ? `[${v.id}] ${v.name}` : String(v.id))
+      .map((v) => {
+        if (v && typeof v === "object" && "id" in v) {
+          const ref = v as { id: number; name?: string };
+          return ref.name ? `[${ref.id}] ${ref.name}` : String(ref.id);
+        }
+        return formatFieldValue(v);
+      })
       .join(", ");
   }
 

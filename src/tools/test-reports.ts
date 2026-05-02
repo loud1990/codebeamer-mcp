@@ -27,12 +27,88 @@ interface TestLogCustomFieldInput {
   values?: unknown[];
 }
 
+interface TestConductedRowInput {
+  testCaseNumber?: string;
+  testRunItemId?: number;
+  testRunUrl?: string;
+  testCaseId?: number;
+  testCaseName?: string;
+  startTime?: string;
+  stopTime?: string;
+  title?: string;
+  redlinesOptionId?: number;
+  redlinesOptionName?: string;
+  statusOptionId?: number;
+  statusOptionName?: string;
+  associatedPtr?: string;
+  comments?: string;
+}
+
+interface PtrRowInput {
+  ptrItemId?: number;
+  ptrTitle?: string;
+  ptrNumber?: string;
+  requirement?: string;
+  description?: string;
+}
+
+interface AbcTestLogDetailsInput {
+  testPhase?: string;
+  testLocation?: string;
+  startDateTime?: string;
+  endDateTime?: string;
+  systemBaselineIdentifier?: string;
+  systemStatus?: string;
+  testConductor?: string;
+  testParticipants?: string;
+  overallSummary?: string;
+  planForNextShift?: string;
+  ptrRows?: PtrRowInput[];
+  testConductedRows?: TestConductedRowInput[];
+}
+
 interface CreatedDailyTestLog {
   item: CbItem;
   readback: CbItem;
   missingFieldIds: number[];
   mismatchedFieldIds: number[];
 }
+
+const ABC_TEST_LOG_FIELDS = {
+  testPhase: 3,
+  startDateTime: 8,
+  endDateTime: 9,
+  overallSummary: 80,
+  testLocation: 10001,
+  systemBaselineIdentifier: 10002,
+  systemStatus: 10003,
+  testConductor: 10004,
+  testParticipants: 10005,
+  planForNextShift: 10006,
+  ptrList: 1000000,
+  testConducted: 2000000,
+} as const;
+
+const ABC_PTR_COLUMNS = {
+  ptrNumber: 1000001,
+  ptrTitle: 1000002,
+  ptrDescription: 1000003,
+  requirement: 1000004,
+  ptrData: 1000005,
+} as const;
+
+const ABC_TEST_CONDUCTED_COLUMNS = {
+  testCaseNumber: 2000001,
+  title: 2000002,
+  redlines: 2000003,
+  status: 2000004,
+  comments: 2000007,
+  startTime: 2000008,
+  stopTime: 2000009,
+  associatedPtr: 2000010,
+  testCase: 2000011,
+  testRun: 2000012,
+} as const;
 
 interface DateWindow {
   start: string;
@@ -110,6 +186,109 @@ function fieldValueMatches(
     return comparableJson(actual.value) === comparableJson(expected.value);
   }
   return true;
+}
+
+function textField(fieldId: number, name: string, value: string | undefined, type = "TextFieldValue"): TestLogCustomFieldInput | undefined {
+  if (value === undefined || value === "") return undefined;
+  return { fieldId, type, value };
+}
+
+function choiceValue(id: number | undefined, name: string | undefined): Array<{ id: number; name?: string; type: string }> | undefined {
+  if (id === undefined) return undefined;
+  return [{ id, ...(name !== undefined ? { name } : {}), type: "ChoiceOptionReference" }];
+}
+
+function trackerItemValue(id: number | undefined, name: string | undefined): Array<{ id: number; name?: string; type: string }> | undefined {
+  if (id === undefined) return undefined;
+  return [{ id, ...(name !== undefined ? { name } : {}), type: "TrackerItemReference" }];
+}
+
+function tableCell(
+  fieldId: number,
+  name: string,
+  type: string,
+  value: string | undefined,
+): { fieldId: number; name: string; type: string; value: string } | undefined {
+  if (value === undefined || value === "") return undefined;
+  return { fieldId, name, type, value };
+}
+
+function tableChoiceCell(
+  fieldId: number,
+  name: string,
+  values: unknown[] | undefined,
+): { fieldId: number; name: string; type: string; values: unknown[] } | undefined {
+  if (values === undefined || values.length === 0) return undefined;
+  return { fieldId, name, type: "ChoiceFieldValue", values };
+}
+
+function buildPtrListField(rows: PtrRowInput[] | undefined): TestLogCustomFieldInput | undefined {
+  if (!rows || rows.length === 0) return undefined;
+  return {
+    fieldId: ABC_TEST_LOG_FIELDS.ptrList,
+    type: "TableFieldValue",
+    values: rows.map((row) => [
+      tableChoiceCell(
+        ABC_PTR_COLUMNS.ptrData,
+        "PTR data",
+        trackerItemValue(row.ptrItemId, row.ptrTitle),
+      ),
+      tableCell(ABC_PTR_COLUMNS.ptrNumber, "PTR #", "TextFieldValue", row.ptrNumber ?? (row.ptrItemId !== undefined ? String(row.ptrItemId) : undefined)),
+      tableCell(ABC_PTR_COLUMNS.ptrTitle, "PTR Title", "TextFieldValue", row.ptrTitle),
+      tableCell(ABC_PTR_COLUMNS.requirement, "Requirement", "TextFieldValue", row.requirement),
+      tableCell(ABC_PTR_COLUMNS.ptrDescription, "PTR Description", "WikiTextFieldValue", row.description),
+    ].filter((cell) => cell !== undefined)),
+  };
+}
+
+function buildTestConductedField(rows: TestConductedRowInput[] | undefined): TestLogCustomFieldInput | undefined {
+  if (!rows || rows.length === 0) return undefined;
+  return {
+    fieldId: ABC_TEST_LOG_FIELDS.testConducted,
+    type: "TableFieldValue",
+    values: rows.map((row) => [
+      tableCell(ABC_TEST_CONDUCTED_COLUMNS.testCaseNumber, "Test Case Number", "TextFieldValue", row.testCaseNumber ?? (row.testRunItemId !== undefined ? String(row.testRunItemId) : undefined)),
+      tableCell(ABC_TEST_CONDUCTED_COLUMNS.testRun, "Test Run", "UrlFieldValue", row.testRunUrl ?? (row.testRunItemId !== undefined ? `[ISSUE:${row.testRunItemId}]` : undefined)),
+      tableChoiceCell(
+        ABC_TEST_CONDUCTED_COLUMNS.testCase,
+        "Test Case",
+        trackerItemValue(row.testCaseId, row.testCaseName),
+      ),
+      tableCell(ABC_TEST_CONDUCTED_COLUMNS.startTime, "Start Time", "TextFieldValue", row.startTime),
+      tableCell(ABC_TEST_CONDUCTED_COLUMNS.stopTime, "Stop Time", "TextFieldValue", row.stopTime),
+      tableCell(ABC_TEST_CONDUCTED_COLUMNS.title, "Test Case Titile", "TextFieldValue", row.title ?? row.testCaseName),
+      tableChoiceCell(
+        ABC_TEST_CONDUCTED_COLUMNS.redlines,
+        "Test Case Redlines",
+        choiceValue(row.redlinesOptionId, row.redlinesOptionName),
+      ),
+      tableChoiceCell(
+        ABC_TEST_CONDUCTED_COLUMNS.status,
+        "Test Case Status",
+        choiceValue(row.statusOptionId, row.statusOptionName),
+      ),
+      tableCell(ABC_TEST_CONDUCTED_COLUMNS.associatedPtr, "Associated PTR", "TextFieldValue", row.associatedPtr),
+      tableCell(ABC_TEST_CONDUCTED_COLUMNS.comments, "Test Case Comments", "WikiTextFieldValue", row.comments),
+    ].filter((cell) => cell !== undefined)),
+  };
+}
+
+function buildAbcTestLogCustomFields(details: AbcTestLogDetailsInput | undefined): TestLogCustomFieldInput[] {
+  if (!details) return [];
+  return [
+    textField(ABC_TEST_LOG_FIELDS.testPhase, "Test Phase", details.testPhase),
+    textField(ABC_TEST_LOG_FIELDS.testLocation, "Test Location", details.testLocation),
+    textField(ABC_TEST_LOG_FIELDS.startDateTime, "Start Date and Time", details.startDateTime, "DateFieldValue"),
+    textField(ABC_TEST_LOG_FIELDS.endDateTime, "End Date and Time", details.endDateTime, "DateFieldValue"),
+    textField(ABC_TEST_LOG_FIELDS.systemBaselineIdentifier, "System Baseline Identifier", details.systemBaselineIdentifier),
+    textField(ABC_TEST_LOG_FIELDS.systemStatus, "System Status", details.systemStatus),
+    textField(ABC_TEST_LOG_FIELDS.testConductor, "Test Conductor", details.testConductor),
+    textField(ABC_TEST_LOG_FIELDS.testParticipants, "Test Participant(s):", details.testParticipants),
+    textField(ABC_TEST_LOG_FIELDS.overallSummary, "Overall Summary", details.overallSummary, "WikiTextFieldValue"),
+    textField(ABC_TEST_LOG_FIELDS.planForNextShift, "Plan for next Shift", details.planForNextShift, "WikiTextFieldValue"),
+    buildPtrListField(details.ptrRows),
+    buildTestConductedField(details.testConductedRows),
+  ].filter((field) => field !== undefined);
 }
 
 function extractResult(item: CbItem): string | undefined {
@@ -383,8 +562,7 @@ function createSuggestedCustomFields(
   observedFields: ObservedTestLogField[],
 ): TestLogCustomFieldInput[] {
   const observedById = new Map(observedFields.map((field) => [field.fieldId, field]));
-  const supported = fields.filter((field) => field.trackerItemField === "customFields" || field.fieldId >= 1000);
-  return supported
+  return fields
     .filter((field) => field.required || observedById.has(field.fieldId))
     .map((field) => {
       const observed = observedById.get(field.fieldId);
@@ -416,6 +594,7 @@ export async function analyzeTestLogSchema(
     const allFields = [
       ...(fieldPage.editableFields ?? []),
       ...(fieldPage.readOnlyFields ?? []),
+      ...(fieldPage.editableTableFields ?? []),
       ...(fieldPage.fields ?? []),
     ];
     for (const field of allFields) {
@@ -455,9 +634,14 @@ export async function createDailyTestLog(
     assignedToIds?: number[];
     parentId?: number;
     customFields?: TestLogCustomFieldInput[];
+    abcTestLogDetails?: AbcTestLogDetailsInput;
   },
 ): Promise<CreatedDailyTestLog> {
   const project = await client.getProject(options.projectId);
+  const customFields = [
+    ...buildAbcTestLogCustomFields(options.abcTestLogDetails),
+    ...(options.customFields ?? []),
+  ];
   const item = await client.createItem(
     options.testLogTrackerId,
     {
@@ -468,7 +652,7 @@ export async function createDailyTestLog(
       ...(options.assignedToIds !== undefined
         ? { assignedTo: options.assignedToIds.map((id) => ({ id })) }
         : {}),
-      ...(options.customFields !== undefined ? { customFields: options.customFields } : {}),
+      ...(customFields.length > 0 ? { customFields } : {}),
     },
     options.parentId,
   );
@@ -476,10 +660,10 @@ export async function createDailyTestLog(
   const readbackFieldsById = new Map(
     readback.customFields?.map((field) => [field.fieldId, field]) ?? [],
   );
-  const missingFieldIds = (options.customFields ?? [])
+  const missingFieldIds = customFields
     .map((field) => field.fieldId)
     .filter((fieldId) => !readbackFieldsById.has(fieldId));
-  const mismatchedFieldIds = (options.customFields ?? [])
+  const mismatchedFieldIds = customFields
     .filter((field) => {
       const readbackField = readbackFieldsById.get(field.fieldId);
       return readbackField !== undefined && !fieldValueMatches(field, readbackField);
@@ -647,9 +831,55 @@ export function registerTestReportTools(
           )
           .optional()
           .describe("Optional Codebeamer custom field payloads. Use analyze_test_log_schema to discover field IDs and value models."),
+        abcTestLogDetails: z
+          .object({
+            testPhase: z.string().optional(),
+            testLocation: z.string().optional(),
+            startDateTime: z.string().optional(),
+            endDateTime: z.string().optional(),
+            systemBaselineIdentifier: z.string().optional(),
+            systemStatus: z.string().optional(),
+            testConductor: z.string().optional(),
+            testParticipants: z.string().optional(),
+            overallSummary: z.string().optional(),
+            planForNextShift: z.string().optional(),
+            ptrRows: z
+              .array(
+                z.object({
+                  ptrItemId: z.number().int().positive().optional(),
+                  ptrTitle: z.string().optional(),
+                  ptrNumber: z.string().optional(),
+                  requirement: z.string().optional(),
+                  description: z.string().optional(),
+                }),
+              )
+              .optional(),
+            testConductedRows: z
+              .array(
+                z.object({
+                  testCaseNumber: z.string().optional(),
+                  testRunItemId: z.number().int().positive().optional(),
+                  testRunUrl: z.string().optional(),
+                  testCaseId: z.number().int().positive().optional(),
+                  testCaseName: z.string().optional(),
+                  startTime: z.string().optional(),
+                  stopTime: z.string().optional(),
+                  title: z.string().optional(),
+                  redlinesOptionId: z.number().int().positive().optional(),
+                  redlinesOptionName: z.string().optional(),
+                  statusOptionId: z.number().int().positive().optional(),
+                  statusOptionName: z.string().optional(),
+                  associatedPtr: z.string().optional(),
+                  comments: z.string().optional(),
+                }),
+              )
+              .optional(),
+          })
+          .optional()
+          .describe("Optional high-level ABC Test Log fields mapped to the known Test Log schema, including PTR List and Test Conducted table rows."),
       },
     },
-    async ({ projectId, testLogTrackerId, date, reportMarkdown, name, statusId, priorityId, assignedToIds, parentId, customFields }) => {
+    async ({ projectId, testLogTrackerId, date, reportMarkdown, name, statusId, priorityId, assignedToIds, parentId, customFields, abcTestLogDetails }) => {
       const result = await createDailyTestLog(client, {
         projectId,
         testLogTrackerId,
@@ -661,6 +891,7 @@ export function registerTestReportTools(
         assignedToIds,
         parentId,
         customFields,
+        abcTestLogDetails,
       });
       const verificationMessages: string[] = [];
       if (result.missingFieldIds.length > 0) {

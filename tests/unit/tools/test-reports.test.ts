@@ -37,7 +37,7 @@ describe("generate_daily_test_report", () => {
     const text = formatDailyTestReport(report);
 
     expect(text).toContain("# Daily Test Report - 2026-05-01");
-    expect(text).toContain("Daily Test Project");
+    expect(text).toContain("SYNTHETIC_DAILY_TEST_PROJECT");
     expect(text).toContain("Test Run tracker: Test Runs (300)");
     expect(text).toContain("Daily regression run");
     expect(text).toContain("| 1 | 901 | 900 | TC-01 Login succeeds | Passed | Passed |");
@@ -84,6 +84,25 @@ describe("analyze_test_log_schema", () => {
     expect(text).toContain("Run Date");
     expect(text).toContain("Suggested Create Payload Fragment");
   });
+
+  it("handles Codebeamer field metadata with id and table fields from real Test Log examples", async () => {
+    const client = makeClient();
+    const analysis = await analyzeTestLogSchema(client, {
+      testLogTrackerId: 119392,
+      exampleItemIds: [154632],
+    });
+
+    expect(analysis.fields.find((field) => field.name === "Test Location")?.fieldId).toBe(10001);
+    expect(analysis.observedFields.some((field) => field.fieldId === 2000000)).toBe(true);
+    expect(analysis.suggestedCustomFields).toEqual(
+      expect.arrayContaining([
+        { fieldId: 3, type: "TextFieldValue", value: "SYNTHETIC_TEST_PHASE" },
+        { fieldId: 10001, type: "TextFieldValue", value: "SYNTHETIC_LOCATION" },
+        expect.objectContaining({ fieldId: 2000000, type: "TableFieldValue" }),
+        expect.objectContaining({ fieldId: 1000000, type: "TableFieldValue" }),
+      ]),
+    );
+  });
 });
 
 describe("create_daily_test_log", () => {
@@ -107,8 +126,66 @@ describe("create_daily_test_log", () => {
     });
 
     expect(result.item.id).toBe(600);
-    expect(result.readback.name).toBe("Daily Test Log - 2026-05-01 - Daily Test Project");
+    expect(result.readback.name).toBe("Daily Test Log - 2026-05-01 - SYNTHETIC_DAILY_TEST_PROJECT");
     expect(result.readback.description).toBe("# Daily Test Report\n\nEverything passed.");
     expect(result.missingFieldIds).toEqual([]);
+  });
+
+  it("maps high-level ABC Test Log details to custom field and table payloads", async () => {
+    const client = makeClient();
+    const result = await createDailyTestLog(client, {
+      projectId: 16,
+      testLogTrackerId: 119392,
+      parentId: 142686,
+      date: "2026-04-15",
+      name: "SYNTHETIC_TEST_PHASE",
+      reportMarkdown: "--",
+      abcTestLogDetails: {
+        testPhase: "SYNTHETIC_TEST_PHASE",
+        testLocation: "SYNTHETIC_LOCATION",
+        startDateTime: "2026-04-15T08:00:00.000",
+        endDateTime: "2026-04-15T17:00:00.000",
+        systemBaselineIdentifier: "SYNTHETIC_BASELINE",
+        systemStatus: "SYNTHETIC_SYSTEM_STATUS",
+        testConductor: "SYNTHETIC_CONDUCTOR",
+        testParticipants: "SYNTHETIC_PARTICIPANTS",
+        overallSummary: "--",
+        ptrRows: [
+          {
+            ptrItemId: 107614,
+            ptrTitle: "SYNTHETIC_PTR_TITLE",
+            description: "SYNTHETIC_PTR_DESCRIPTION",
+          },
+        ],
+        testConductedRows: [
+          {
+            testRunItemId: 154584,
+            testCaseId: 97212,
+            testCaseName: "SYNTHETIC_TEST_CASE_NAME",
+            startTime: "14:16",
+            stopTime: "15:11",
+            title: "SYNTHETIC_TEST_CASE_TITLE",
+            redlinesOptionId: 1,
+            redlinesOptionName: "Yes",
+            statusOptionId: 3,
+            statusOptionName: "Incomplete",
+            associatedPtr: "107614",
+            comments: "SYNTHETIC_TEST_COMMENT",
+          },
+        ],
+      },
+    });
+
+    expect(result.item.id).toBe(154700);
+    expect(result.missingFieldIds).toEqual([]);
+    expect(result.mismatchedFieldIds).toEqual([]);
+    expect(result.readback.customFields).toEqual(
+      expect.arrayContaining([
+        { fieldId: 3, type: "TextFieldValue", value: "SYNTHETIC_TEST_PHASE" },
+        { fieldId: 10001, type: "TextFieldValue", value: "SYNTHETIC_LOCATION" },
+        expect.objectContaining({ fieldId: 1000000, type: "TableFieldValue" }),
+        expect.objectContaining({ fieldId: 2000000, type: "TableFieldValue" }),
+      ]),
+    );
   });
 });

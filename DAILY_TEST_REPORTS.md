@@ -149,8 +149,28 @@ Inputs:
 | `assignedToIds` | Optional assignees. |
 | `parentId` | Optional parent item for nesting. |
 | `customFields` | Optional typed Codebeamer custom field payloads discovered from manual logs. |
+| `abcTestLogDetails` | Optional high-level ABC Test Log fields that map to the observed tracker schema. |
 
 The write tool should not regenerate the report. It should create exactly the report the user reviewed or provided.
+
+For the observed ABC Test Log tracker, `abcTestLogDetails` maps these fields:
+
+| Input | Codebeamer field |
+|---|---|
+| `testPhase` | `3` Test Phase |
+| `testLocation` | `10001` Test Location |
+| `startDateTime` | `8` Start Date and Time |
+| `endDateTime` | `9` End Date and Time |
+| `systemBaselineIdentifier` | `10002` System Baseline Identifier |
+| `systemStatus` | `10003` System Status |
+| `testConductor` | `10004` Test Conductor |
+| `testParticipants` | `10005` Test Participant(s): |
+| `overallSummary` | `80` Overall Summary |
+| `planForNextShift` | `10006` Plan for next Shift |
+| `ptrRows` | `1000000` PTR List table |
+| `testConductedRows` | `2000000` Test Conducted table |
+
+Use `customFields` for any field that is not covered by `abcTestLogDetails`, or to override generated field payloads.
 
 ### `analyze_test_log_schema`
 
@@ -170,6 +190,12 @@ Output:
 - sample values and option references from examples
 - suggested `customFields` payload fragment for `create_daily_test_log`
 - warnings for required fields that were not populated in the examples
+
+The analyzer handles both Codebeamer field shapes seen in Swagger:
+
+- tracker fields that use `id`
+- item fields that use `fieldId`
+- table fields returned under `editableTableFields`
 
 Use this before automating Test Log creation when the Test Log tracker has custom fields.
 
@@ -194,6 +220,7 @@ Splitting the workflow is safer and easier to audit:
 - Keep generated reports deterministic: sort projects by name/ID and preserve Codebeamer child order.
 - Avoid fetching comments, relations, reviews, or traceability by default. Add those only if the user asks for audit-level detail.
 - For Test Log custom fields, run `analyze_test_log_schema` against one or more manually created logs, then pass the adjusted `customFields` payload into `create_daily_test_log`.
+- For the ABC Test Log schema, prefer `abcTestLogDetails` for ordinary daily log creation and use raw `customFields` only for unusual fields or overrides.
 
 ## Report Skeleton
 
