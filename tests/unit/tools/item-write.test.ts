@@ -42,6 +42,30 @@ describe("create_item", () => {
     expect(item.id).toBe(600);
     expect(item.name).toBe("Simple task");
   });
+
+  it("creates an item with generic custom fields", async () => {
+    const client = makeClient();
+    const item = await client.createItem(100, {
+      name: "Custom field item",
+      customFields: [
+        { fieldId: 10000, type: "TextFieldValue", value: "SYNTHETIC_VALUE" },
+        {
+          fieldId: 10001,
+          type: "ChoiceFieldValue",
+          values: [{ id: 10, name: "Synthetic option", type: "ChoiceOptionReference" }],
+        },
+      ],
+    });
+
+    expect(item.customFields).toEqual([
+      { fieldId: 10000, type: "TextFieldValue", value: "SYNTHETIC_VALUE" },
+      {
+        fieldId: 10001,
+        type: "ChoiceFieldValue",
+        values: [{ id: 10, name: "Synthetic option", type: "ChoiceOptionReference" }],
+      },
+    ]);
+  });
 });
 
 describe("update_item", () => {
@@ -56,5 +80,18 @@ describe("update_item", () => {
 
     const text = formatItem(item);
     expect(text).toContain("[500]");
+  });
+
+  it("updates generic custom fields", async () => {
+    const client = makeClient();
+    const item = await client.updateItem(500, {
+      customFields: [
+        { fieldId: 10000, type: "TextFieldValue", value: "UPDATED_SYNTHETIC_VALUE" },
+      ],
+    });
+
+    expect(item.customFields).toEqual([
+      { fieldId: 10000, type: "TextFieldValue", value: "UPDATED_SYNTHETIC_VALUE" },
+    ]);
   });
 });

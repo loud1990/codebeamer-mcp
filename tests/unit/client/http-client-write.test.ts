@@ -92,4 +92,17 @@ describe("HttpClient.put", () => {
     expect(receivedBody).toEqual({ name: "Updated" });
     expect(result).toEqual({ id: 1, name: "Updated" });
   });
+
+  it("handles successful empty 204 responses", async () => {
+    mockServer.use(
+      http.put(`${BASE}/empty-put`, () => new HttpResponse(null, { status: 204 })),
+    );
+
+    const client = makeClient();
+    const result = await client.put<void>("/empty-put", {
+      body: { ok: true },
+    });
+
+    expect(result).toBeUndefined();
+  });
 });

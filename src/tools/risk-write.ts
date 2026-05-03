@@ -3,6 +3,30 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CodebeamerClient } from "../client/codebeamer-client.js";
 import { formatItem } from "../formatters/item-formatter.js";
 
+export function buildHarmCreateData(options: {
+  name: string;
+  description?: string;
+  imdrfCode?: string;
+  severity?: number;
+  imdrfCodeFieldId: number;
+  severityFieldId: number;
+}) {
+  const customFields: Array<{ fieldId: number; type: string; value: unknown }> = [];
+
+  if (options.imdrfCode !== undefined) {
+    customFields.push({ fieldId: options.imdrfCodeFieldId, type: "TextFieldValue", value: options.imdrfCode });
+  }
+  if (options.severity !== undefined) {
+    customFields.push({ fieldId: options.severityFieldId, type: "IntegerFieldValue", value: options.severity });
+  }
+
+  return {
+    name: options.name,
+    ...(options.description !== undefined ? { description: options.description } : {}),
+    ...(customFields.length > 0 ? { customFields } : {}),
+  };
+}
+
 export function registerRiskWriteTools(
   server: McpServer,
   client: CodebeamerClient,
@@ -37,6 +61,18 @@ export function registerRiskWriteTools(
           .max(5)
           .optional()
           .describe("Severity level (integer 1–5)"),
+        imdrfCodeFieldId: z
+          .number()
+          .int()
+          .positive()
+          .default(10000)
+          .describe("Field ID for IMDRF code. Defaults to 10000 for legacy RM Harms List trackers."),
+        severityFieldId: z
+          .number()
+          .int()
+          .positive()
+          .default(10001)
+          .describe("Field ID for severity. Defaults to 10001 for legacy RM Harms List trackers."),
         parentId: z
           .number()
           .int()
@@ -45,21 +81,15 @@ export function registerRiskWriteTools(
           .describe("Parent item ID to nest this harm inside (e.g. a folder)"),
       },
     },
-    async ({ trackerId, name, description, imdrfCode, severity, parentId }) => {
-      const customFields: Array<{ fieldId: number; type: string; value: unknown }> = [];
-
-      if (imdrfCode !== undefined) {
-        customFields.push({ fieldId: 10000, type: "TextFieldValue", value: imdrfCode });
-      }
-      if (severity !== undefined) {
-        customFields.push({ fieldId: 10001, type: "IntegerFieldValue", value: severity });
-      }
-
-      const data = {
+    async ({ trackerId, name, description, imdrfCode, severity, imdrfCodeFieldId, severityFieldId, parentId }) => {
+      const data = buildHarmCreateData({
         name,
-        ...(description !== undefined ? { description } : {}),
-        ...(customFields.length > 0 ? { customFields } : {}),
-      };
+        description,
+        imdrfCode,
+        severity,
+        imdrfCodeFieldId,
+        severityFieldId,
+      });
 
       const item = await client.createItem(trackerId, data, parentId);
       return { content: [{ type: "text", text: formatItem(item) }] };

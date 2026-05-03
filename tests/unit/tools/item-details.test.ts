@@ -7,6 +7,7 @@ import {
   formatReferences,
   formatComments,
   formatItemFields,
+  formatReviews,
 } from "../../../src/formatters/item-formatter.js";
 
 const BASE = "https://test-cb.example.com/v3";
@@ -46,12 +47,36 @@ describe("get_item_fields", () => {
     const fields = await client.getItemFields(500);
     const text = formatItemFields(fields);
 
-    expect(text).toContain("## Item Fields (3)");
-    expect(text).toContain("### Editable Fields (2)");
+    expect(text).toContain("## Item Fields (4)");
+    expect(text).toContain("### Editable Fields (3)");
     expect(text).toContain("| 3 | Summary | TextFieldValue | Login button does not respond |");
     expect(text).toContain("| 5 | Assigned to | ChoiceFieldValue | [1] john.doe |");
     expect(text).toContain("### Read-Only Fields (1)");
     expect(text).toContain("| 0 | ID | IntegerFieldValue | 500 |");
+  });
+
+  it("formats editable table fields", async () => {
+    const client = makeClient();
+    const fields = await client.getItemFields(154632);
+    const text = formatItemFields(fields);
+
+    expect(text).toContain("### Editable Table Fields (2)");
+    expect(text).toContain("#### Test Conducted");
+    expect(text).toContain("SYNTHETIC_TEST_CASE_NAME");
+    expect(text).toContain("#### PTR List");
+    expect(text).toContain("SYNTHETIC_PTR_TITLE");
+  });
+});
+
+describe("get_item_reviews", () => {
+  it("handles paginated review responses", async () => {
+    const client = makeClient();
+    const reviews = await client.getItemReviews(777);
+    const text = formatReviews(reviews);
+
+    expect(reviews).toHaveLength(1);
+    expect(text).toContain("APPROVED");
+    expect(text).toContain("reviewer\\|one");
   });
 });
 

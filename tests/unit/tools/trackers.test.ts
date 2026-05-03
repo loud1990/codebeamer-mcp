@@ -47,7 +47,7 @@ describe("get_tracker", () => {
     expect(text).toContain("Description");
     expect(text).toContain("TextFieldValue");
     expect(text).toContain("### Items");
-    expect(text).toContain("Login button does not respond");
+    expect(text).toContain("Direct tracker item");
     expect(text).toContain("Open");
   });
 });

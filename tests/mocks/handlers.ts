@@ -118,7 +118,18 @@ export const handlers = [
   }),
 
   http.get(`${BASE}/trackers/:id/items`, () =>
-    HttpResponse.json([makeItem()]),
+    HttpResponse.json([makeItem({ id: 7000, name: "Direct tracker item" })]),
+  ),
+
+  http.get(`${BASE}/trackers/:id/schema`, () =>
+    HttpResponse.json([
+      {
+        id: 1234,
+        name: "Superordinate Requirement",
+        type: "ChoiceFieldValue",
+        legacyRestName: "superordinateRequirement",
+      },
+    ]),
   ),
 
   http.get(`${BASE}/trackers/:id/children`, ({ params }) => {
@@ -221,6 +232,27 @@ export const handlers = [
     HttpResponse.json([makeComment(), makeComment({ id: 301, comment: "Fixed in v2.1", createdBy: { id: 2, name: "jane.smith" } })]),
   ),
 
+  http.get(`${BASE}/items/:id/reviews`, ({ params }) => {
+    const id = Number(params.id);
+    if (id === 777) {
+      return HttpResponse.json({
+        items: [
+          {
+            result: "APPROVED",
+            reviewers: [
+              {
+                user: { id: 5, name: "reviewer|one" },
+                decision: "APPROVED",
+                reviewedAt: "2026-05-02T10:00:00Z",
+              },
+            ],
+          },
+        ],
+      });
+    }
+    return HttpResponse.json([]);
+  }),
+
   http.get(`${BASE}/items/:id/fields`, ({ params }) => {
     const id = Number(params.id);
     if (id === 950) {
@@ -316,6 +348,12 @@ export const handlers = [
           name: "Assigned to",
           type: "ChoiceFieldValue",
           values: [{ id: 1, name: "john.doe", type: "UserReference" }],
+        },
+        {
+          fieldId: 1234,
+          name: "Superordinate Requirement",
+          type: "ChoiceFieldValue",
+          values: [],
         },
       ],
       readOnlyFields: [
@@ -478,8 +516,16 @@ export const handlers = [
         id: Number(params.id),
         ...(body.name != null && { name: body.name as string }),
         ...(body.status != null && { status: body.status as { id: number; name: string } }),
+        customFields: body.customFields as NonNullable<ReturnType<typeof makeItem>["customFields"]> | undefined,
       }),
     );
+  }),
+
+  http.put(`${BASE}/items/:id/fields`, ({ params }) => {
+    if (Number(params.id) === 502) {
+      return new HttpResponse(null, { status: 204 });
+    }
+    return HttpResponse.json({});
   }),
 
   // Add comment (multipart/form-data)

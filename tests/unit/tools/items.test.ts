@@ -33,13 +33,13 @@ describe("search_items", () => {
 describe("list_tracker_items", () => {
   it("returns formatted item list", async () => {
     const client = makeClient();
-    const { items } = await client.listTrackerItems(100, 1, 25);
+    const { items, source } = await client.listTrackerItems(100, 1, 25);
     const text = formatItemList(items);
 
     expect(text).toContain("## Items");
-    expect(text).toContain("500");
-    expect(text).toContain("Open");
-    expect(text).toContain("High");
+    expect(source).toBe("direct");
+    expect(text).toContain("7000");
+    expect(text).toContain("Direct tracker item");
   });
 });
 
@@ -97,5 +97,31 @@ describe("get_item — test case with test steps", () => {
     // TestStepsFieldValue must not appear as a plain "Custom Fields" bullet
     const customFieldsSection = text.split("### Test Steps")[0];
     expect(customFieldsSection).not.toContain("**Test Steps:**");
+  });
+
+  it("renders non-test table fields as generic tables", async () => {
+    const text = formatItem({
+      id: 800,
+      name: "Item with table",
+      customFields: [
+        {
+          fieldId: 1000000,
+          name: "Generic Table",
+          type: "TableFieldValue",
+          values: [
+            [
+              { fieldId: 1, name: "Column A", value: "Value|A" },
+              { fieldId: 2, name: "Column B", value: "Line 1\nLine 2" },
+            ],
+          ],
+        },
+      ],
+    });
+
+    expect(text).toContain("#### Generic Table");
+    expect(text).toContain("| Column A | Column B |");
+    expect(text).toContain("Value\\|A");
+    expect(text).toContain("Line 1 Line 2");
+    expect(text).not.toContain("_No test steps defined._");
   });
 });

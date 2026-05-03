@@ -157,7 +157,7 @@ export interface CbUpdateItemRequest {
   priority?: { id: number };
   assignedTo?: Array<{ id: number }>;
   storyPoints?: number;
-  customFields?: Array<{ fieldId: number; type: string; values?: Array<{ id: number; type: string }>; value?: unknown }>;
+  customFields?: Array<{ fieldId: number; type: string; values?: unknown[]; value?: unknown }>;
 }
 
 export interface CbEditableField {
@@ -328,35 +328,39 @@ export class CodebeamerClient {
     trackerId: number,
     page: number,
     pageSize: number,
-  ): Promise<{ items: CbItem[]; debug?: string }> {
-    const raw = await this.http.get<unknown>("/items/query", {
-      params: { queryString: `tracker.id IN (${trackerId})`, page, pageSize },
-      resource: `items for tracker ${trackerId}`,
-    });
-    const items = toArray<CbItem>(raw);
-    if (items.length > 0) return { items };
-
-    // Items empty — also try the direct endpoint so we can show raw debug info
+  ): Promise<{ items: CbItem[]; debug?: string; source: "direct" | "query" }> {
     let rawDirect: unknown;
     try {
       rawDirect = await this.http.get<unknown>(`/trackers/${trackerId}/items`, {
         params: { page, pageSize },
-        resource: `items for tracker ${trackerId} (direct)`,
+        resource: `items for tracker ${trackerId}`,
       });
-    } catch {
-      rawDirect = null;
+      const directItems = toArray<CbItem>(rawDirect);
+      if (directItems.length > 0) return { items: directItems, source: "direct" };
+    } catch (error) {
+      rawDirect = error instanceof Error ? error.message : String(error);
     }
+
+    const raw = await this.http.get<unknown>("/items/query", {
+      params: { queryString: `tracker.id IN (${trackerId})`, page, pageSize },
+      resource: `items for tracker ${trackerId} (query fallback)`,
+    });
+    const items = toArray<CbItem>(raw);
+    if (items.length > 0) return { items, source: "query" };
+
     const rawObj = raw as Record<string, unknown> | null;
-    const directObj = rawDirect as Record<string, unknown> | null;
+    const directObj =
+      rawDirect && typeof rawDirect === "object"
+        ? (rawDirect as Record<string, unknown>)
+        : null;
     const queryTotal = rawObj?.["total"] ?? "?";
     const directTotal = directObj?.["total"] ?? "?";
-    const directItems = toArray<CbItem>(rawDirect);
     const debug =
-      `API vrátilo total=${queryTotal} pro cbQL query a total=${directTotal} pro přímý endpoint.\n` +
-      `Pokud je total=0, Codebeamer říká že tam žádné itemy nejsou (špatný tracker ID, chybí oprávnění nebo prázdný tracker).\n` +
-      `query: ${JSON.stringify(raw).slice(0, 300)}\n` +
-      `direct: ${JSON.stringify(rawDirect).slice(0, 300)}`;
-    return { items: directItems, debug };
+      `Direct endpoint total=${directTotal}; cbQL fallback total=${queryTotal}.\n` +
+      `If both totals are 0, Codebeamer reports no visible items for this tracker. Check tracker ID, permissions, or whether the tracker is empty.\n` +
+      `direct: ${JSON.stringify(rawDirect).slice(0, 300)}\n` +
+      `query: ${JSON.stringify(raw).slice(0, 300)}`;
+    return { items, debug, source: "query" };
   }
 
   async searchItems(
@@ -376,7 +380,7 @@ export class CodebeamerClient {
     const raw = await this.http.get<unknown>(`/items/${id}/reviews`, {
       resource: `reviews for item ${id}`,
     });
-    return Array.isArray(raw) ? raw : [];
+    return toArray(raw);
   }
 
   // Item details

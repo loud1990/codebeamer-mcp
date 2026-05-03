@@ -74,8 +74,9 @@ export function registerItemTools(
       },
     },
     async ({ trackerId, page, pageSize }) => {
-      const { items, debug } = await client.listTrackerItems(trackerId, page, pageSize);
+      const { items, debug, source } = await client.listTrackerItems(trackerId, page, pageSize);
       let text = formatItemList(items);
+      text += `\n\n_Source: ${source === "direct" ? "direct tracker items endpoint" : "cbQL query fallback"}_`;
       if (items.length === 0 && debug) {
         text += `\n\n---\n**Debug (raw API responses):**\n\`\`\`\n${debug}\n\`\`\``;
       }
