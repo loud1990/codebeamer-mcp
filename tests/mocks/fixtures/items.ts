@@ -1,4 +1,5 @@
 import type {
+  CbReference,
   CbItem,
   CbRelation,
   CbItemRelationsPage,
@@ -31,6 +32,15 @@ export function makeItem(overrides: Partial<CbItem> = {}): CbItem {
         value: { id: 50, name: "Authentication" },
       },
     ],
+    ...overrides,
+  };
+}
+
+export function makeItemChild(overrides: Partial<CbReference> = {}): CbReference {
+  return {
+    id: 510,
+    name: "Login child requirement",
+    type: "TrackerItemReference",
     ...overrides,
   };
 }

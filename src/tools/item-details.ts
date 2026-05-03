@@ -2,16 +2,74 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { CodebeamerClient } from "../client/codebeamer-client.js";
 import {
+  formatItemChildren,
   formatRelations,
   formatReferences,
   formatComments,
   formatReviews,
+  formatItemFields,
 } from "../formatters/item-formatter.js";
 
 export function registerItemDetailTools(
   server: McpServer,
   client: CodebeamerClient,
 ): void {
+  server.registerTool(
+    "get_item_fields",
+    {
+      title: "Get Item Fields",
+      description:
+        "Get all field values for a Codebeamer work item in FieldValue format. " +
+        "Returns editable and read-only field groups when provided by Codebeamer, " +
+        "including field IDs and value model types needed for custom-field updates.",
+      inputSchema: {
+        itemId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Numeric item ID"),
+      },
+    },
+    async ({ itemId }) => {
+      const fields = await client.getItemFields(itemId);
+      return { content: [{ type: "text", text: formatItemFields(fields) }] };
+    },
+  );
+
+  server.registerTool(
+    "get_item_children",
+    {
+      title: "Get Item Children",
+      description:
+        "Get the immediate child tracker items for a Codebeamer item. " +
+        "Returns child item references in Codebeamer outline order; does not recurse into descendants.",
+      inputSchema: {
+        itemId: z
+          .number()
+          .int()
+          .positive()
+          .describe("Numeric parent item ID"),
+        page: z
+          .number()
+          .int()
+          .min(1)
+          .default(1)
+          .describe("Page number (starts at 1)"),
+        pageSize: z
+          .number()
+          .int()
+          .min(1)
+          .max(50)
+          .default(25)
+          .describe("Items per page (max 50)"),
+      },
+    },
+    async ({ itemId, page, pageSize }) => {
+      const children = await client.getItemChildren(itemId, page, pageSize);
+      return { content: [{ type: "text", text: formatItemChildren(children) }] };
+    },
+  );
+
   server.registerTool(
     "get_item_relations",
     {

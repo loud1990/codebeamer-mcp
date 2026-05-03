@@ -2,11 +2,12 @@ import { describe, it, expect } from "vitest";
 import {
   formatItemList,
   formatItem,
+  formatItemChildren,
   formatRelations,
   formatReferences,
   formatComments,
 } from "../../../src/formatters/item-formatter.js";
-import { makeItem, makeItemRelationsPage, makeComment } from "../../mocks/fixtures/items.js";
+import { makeItem, makeItemChild, makeItemRelationsPage, makeComment } from "../../mocks/fixtures/items.js";
 
 describe("formatItemList", () => {
   it("formats empty list", () => {
@@ -37,6 +38,23 @@ describe("formatItem", () => {
     expect(text).not.toContain("Story Points");
     expect(text).not.toContain("Custom Fields");
     expect(text).not.toContain("Description");
+  });
+});
+
+describe("formatItemChildren", () => {
+  it("formats empty children", () => {
+    expect(formatItemChildren([])).toBe("_No child items found._");
+  });
+
+  it("formats child references", () => {
+    const text = formatItemChildren([
+      makeItemChild(),
+      makeItemChild({ id: 511, name: "Child without type", type: undefined }),
+    ]);
+
+    expect(text).toContain("## Child Items (2)");
+    expect(text).toContain("| 510 | Login child requirement | TrackerItemReference |");
+    expect(text).toContain("| 511 | Child without type | - |");
   });
 });
 

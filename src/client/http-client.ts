@@ -94,6 +94,15 @@ export class HttpClient {
       throw mapHttpError(response.status, body, options.resource ?? path);
     }
 
-    return response.json() as Promise<T>;
+    if (response.status === 204) {
+      return undefined as T;
+    }
+
+    const text = await response.text();
+    if (text.length === 0) {
+      return undefined as T;
+    }
+
+    return JSON.parse(text) as T;
   }
 }

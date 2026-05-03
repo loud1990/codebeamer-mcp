@@ -4,7 +4,7 @@ An MCP (Model Context Protocol) server for Codebeamer ALM. Allows Claude and oth
 
 [![codebeamer-mcp MCP server](https://glama.ai/mcp/servers/3KniGHtcZ/codebeamer-mcp/badges/card.svg)](https://glama.ai/mcp/servers/3KniGHtcZ/codebeamer-mcp)
 
-## Tools (18)
+## Tools (24)
 
 ### Read
 
@@ -14,25 +14,31 @@ An MCP (Model Context Protocol) server for Codebeamer ALM. Allows Claude and oth
 | `get_project` | Get project details |
 | `list_trackers` | List trackers in a project |
 | `get_tracker` | Get tracker details |
+| `get_tracker_root_children` | Get root-level outline items in a tracker |
 | `list_tracker_items` | List items in a tracker |
 | `search_items` | Full-text / cbQL search |
 | `get_item` | Get item details including test steps (action + expected result) for test case items |
+| `get_item_fields` | Get item field values grouped by editability, including field IDs and value model types |
+| `get_item_children` | Get immediate child items in outline order |
 | `get_item_relations` | Get outgoing/incoming associations (depends on, blocks, …) |
 | `get_item_references` | Get upstream/downstream traceability references (derived from, covers, …) |
 | `get_item_comments` | Get item comments |
 | `get_item_reviews` | Get Review Hub reviews for an item (result, reviewers, votes) |
 | `get_user` | Get user details |
+| `generate_daily_test_report` | Generate a daily report from Test Run tracker items and recursive children |
+| `analyze_test_log_schema` | Analyze manual Test Log examples to discover required custom fields |
 
 ### Write
 
 | Tool | Description |
 |---|---|
-| `create_item` | Create a new item in a tracker. Supports folders, item type, and parent nesting |
+| `create_item` | Create a new item in a tracker. Supports folders, item type, parent nesting, and typed custom fields |
 | `update_item` | Update an existing item (name, description, status, priority, assignee, custom fields) |
 | `add_comment` | Add a comment to an item |
 | `create_association` | Create an association between two items (e.g. depends on, blocks) |
 | `create_reference` | Add a downstream traceability reference between two items |
-| `create_harm` | Create a harm entry in an RM Harms List tracker with IMDRF code and severity (1–5) |
+| `create_harm` | Create a harm entry in an RM Harms List tracker with configurable IMDRF/severity field IDs |
+| `create_daily_test_log` | Create a Test Log item from a reviewed daily test report, including ABC Test Log fields and custom fields |
 
 ## Installation
 

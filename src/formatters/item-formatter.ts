@@ -1,10 +1,18 @@
 import type {
+  CbReference,
   CbItem,
   CbItemRelationsPage,
   CbComment,
   CbTrackerItemReview,
   CbTestStep,
+  CbEditableField,
+  CbItemFieldsPage,
 } from "../client/codebeamer-client.js";
+
+function md(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "-";
+  return String(value).replace(/\|/g, "\\|").replace(/\r?\n/g, " ");
+}
 
 export function formatItemList(items: CbItem[]): string {
   const header = `## Items (${items.length} total)\n`;
@@ -13,7 +21,7 @@ export function formatItemList(items: CbItem[]): string {
 
   const rows = items.map(
     (item) =>
-      `| ${item.id} | ${item.name} | ${item.status?.name ?? "-"} | ${item.priority?.name ?? "-"} | ${item.assignedTo?.map((u) => u.name).join(", ") || "-"} |`,
+      `| ${item.id} | ${md(item.name)} | ${md(item.status?.name)} | ${md(item.priority?.name)} | ${md(item.assignedTo?.map((u) => u.name).join(", "))} |`,
   );
 
   return [
@@ -26,7 +34,7 @@ export function formatItemList(items: CbItem[]): string {
 
 export function formatItem(item: CbItem): string {
   const lines: string[] = [
-    `## [${item.id}] ${item.name}`,
+    `## [${item.id}] ${md(item.name)}`,
     "",
     `- **Tracker:** ${item.tracker?.name ?? "?"} (ID: ${item.tracker?.id ?? "?"})`,
     `- **Project:** ${item.project?.name ?? "?"}`,
@@ -50,8 +58,9 @@ export function formatItem(item: CbItem): string {
   }
 
   if (item.customFields && item.customFields.length > 0) {
-    const isTestStepField = (f: { type?: string }) =>
-      f.type === "TestStepsFieldValue" || f.type === "TableFieldValue";
+    const isTestStepField = (f: { name?: string; type?: string }) =>
+      f.type === "TestStepsFieldValue" ||
+      (f.type === "TableFieldValue" && ["Test Steps", "Test Step Results"].includes(f.name ?? ""));
 
     const regularFields = item.customFields.filter((f) => !isTestStepField(f));
     const testStepFields = item.customFields.filter((f) => isTestStepField(f));
@@ -59,11 +68,15 @@ export function formatItem(item: CbItem): string {
     if (regularFields.length > 0) {
       lines.push("", "### Custom Fields", "");
       for (const field of regularFields) {
-        const vals = field.values as Array<{ id: number; name?: string }> | undefined;
-        const displayValue = vals && vals.length > 0
-          ? vals.map((v) => v.name ? `[${v.id}] ${v.name}` : String(v.id)).join(", ")
-          : formatFieldValue(field.value);
-        lines.push(`- **${field.name}:** ${displayValue}`);
+        if (field.type === "TableFieldValue") {
+          lines.push("", `#### ${field.name}`, "", ...formatTableField(field.values));
+        } else {
+          const vals = field.values as Array<{ id: number; name?: string }> | undefined;
+          const displayValue = vals && vals.length > 0
+            ? vals.map((v) => v.name ? `[${v.id}] ${v.name}` : String(v.id)).join(", ")
+            : formatFieldValue(field.value);
+          lines.push(`- **${field.name}:** ${displayValue}`);
+        }
       }
     }
 
@@ -97,8 +110,8 @@ export function formatItem(item: CbItem): string {
         lines.push("|---|--------|-----------------|");
         for (const step of steps) {
           const num = (step.index ?? 0) + 1;
-          const action = (step.actionDescription ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
-          const expected = (step.expectedResults ?? "").replace(/\|/g, "\\|").replace(/\n/g, " ");
+          const action = md(step.actionDescription);
+          const expected = md(step.expectedResults);
           lines.push(`| ${num} | ${action} | ${expected} |`);
         }
       }
@@ -106,6 +119,22 @@ export function formatItem(item: CbItem): string {
   }
 
   return lines.join("\n");
+}
+
+export function formatItemChildren(children: CbReference[]): string {
+  if (children.length === 0) return "_No child items found._";
+
+  const rows = children.map(
+    (child) => `| ${child.id} | ${md(child.name)} | ${md(child.type)} |`,
+  );
+
+  return [
+    `## Child Items (${children.length})`,
+    "",
+    "| ID | Name | Type |",
+    "|----|------|------|",
+    ...rows,
+  ].join("\n");
 }
 
 function formatFieldValue(value: unknown): string {
@@ -119,9 +148,42 @@ function formatFieldValue(value: unknown): string {
   return String(value);
 }
 
+function formatTableField(values: unknown[] | undefined): string[] {
+  const rows = Array.isArray(values) ? (values.filter(Array.isArray) as unknown[][]) : [];
+  if (rows.length === 0) return ["_No rows._"];
+
+  const columnNames = new Set<string>();
+  for (const row of rows) {
+    for (const cell of row) {
+      if (cell && typeof cell === "object" && "name" in cell) {
+        columnNames.add(String((cell as { name: unknown }).name));
+      }
+    }
+  }
+
+  const columns = [...columnNames];
+  if (columns.length === 0) return ["_No displayable columns._"];
+
+  return [
+    `| ${columns.map(md).join(" | ")} |`,
+    `| ${columns.map(() => "---").join(" | ")} |`,
+    ...rows.map((row) => {
+      const cells = row.filter((cell): cell is { name: string; value?: unknown; values?: unknown[] } =>
+        cell !== null && typeof cell === "object" && "name" in cell,
+      );
+      return `| ${columns.map((column) => {
+        const cell = cells.find((candidate) => candidate.name === column);
+        if (!cell) return "-";
+        if (cell.values && cell.values.length > 0) return md(formatFieldValue(cell.values));
+        return md(formatFieldValue(cell.value));
+      }).join(" | ")} |`;
+    }),
+  ];
+}
+
 function relationsTable(relations: { id: number; type?: { name?: string }; itemRevision?: { id: number; name: string } }[]): string[] {
   const rows = relations.map(
-    (r) => `| ${r.id} | ${r.type?.name ?? "?"} | ${r.itemRevision?.id ?? "?"} | ${r.itemRevision?.name ?? "?"} |`,
+    (r) => `| ${r.id} | ${md(r.type?.name ?? "?")} | ${r.itemRevision?.id ?? "?"} | ${md(r.itemRevision?.name ?? "?")} |`,
   );
   return [
     "| Relation ID | Type | Target ID | Target Name |",
@@ -199,7 +261,7 @@ export function formatReviews(reviews: CbTrackerItemReview[]): string {
         const role = r.asRole?.name ?? "-";
         const decision = r.decision ?? "UNDECIDED";
         const at = r.reviewedAt ? r.reviewedAt.replace("T", " ").slice(0, 16) : "-";
-        lines.push(`| ${user} | ${role} | ${decision} | ${at} |`);
+        lines.push(`| ${md(user)} | ${md(role)} | ${md(decision)} | ${md(at)} |`);
       }
     } else {
       lines.push("_No reviewers assigned._");
@@ -220,4 +282,64 @@ export function formatComments(comments: CbComment[]): string {
   );
 
   return [`## Comments (${comments.length})`, "", ...formatted].join("\n\n");
+}
+
+export function formatItemFields(page: CbItemFieldsPage): string {
+  const editable = page.editableFields ?? [];
+  const readOnly = page.readOnlyFields ?? [];
+  const editableTable = page.editableTableFields ?? [];
+  const fields = page.fields ?? [];
+  const total = editable.length + readOnly.length + editableTable.length + fields.length;
+
+  if (total === 0) return "_No item fields found._";
+
+  const lines: string[] = [`## Item Fields (${total})`];
+
+  if (editable.length > 0) {
+    lines.push("", `### Editable Fields (${editable.length})`, "", ...fieldTable(editable));
+  }
+
+  if (readOnly.length > 0) {
+    lines.push("", `### Read-Only Fields (${readOnly.length})`, "", ...fieldTable(readOnly));
+  }
+
+  if (editableTable.length > 0) {
+    lines.push("", `### Editable Table Fields (${editableTable.length})`);
+    for (const field of editableTable) {
+      lines.push("", `#### ${field.name}`, "", ...formatTableField(field.values));
+    }
+  }
+
+  if (fields.length > 0) {
+    lines.push("", `### Fields (${fields.length})`, "", ...fieldTable(fields));
+  }
+
+  return lines.join("\n");
+}
+
+function fieldTable(fields: CbEditableField[]): string[] {
+  return [
+    "| Field ID | Name | Type | Value |",
+    "|----------|------|------|-------|",
+    ...fields.map(
+      (field) =>
+        `| ${field.fieldId} | ${md(field.name)} | ${md(field.type)} | ${md(formatEditableFieldValue(field))} |`,
+    ),
+  ];
+}
+
+function formatEditableFieldValue(field: CbEditableField): string {
+  if (field.values && field.values.length > 0) {
+    return field.values
+      .map((v) => {
+        if (v && typeof v === "object" && "id" in v) {
+          const ref = v as { id: number; name?: string };
+          return ref.name ? `[${ref.id}] ${ref.name}` : String(ref.id);
+        }
+        return formatFieldValue(v);
+      })
+      .join(", ");
+  }
+
+  return formatFieldValue(field.value);
 }

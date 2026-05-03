@@ -7,3 +7,4 @@ export { registerItemWriteTools } from "./item-write.js";
 export { registerCommentWriteTools } from "./comments-write.js";
 export { registerAssociationWriteTools } from "./associations-write.js";
 export { registerRiskWriteTools } from "./risk-write.js";
+export { registerTestReportTools } from "./test-reports.js";

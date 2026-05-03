@@ -61,20 +61,19 @@ export function registerAssociationWriteTools(
     {
       title: "Create Downstream Reference",
       description:
-        "Add a downstream reference from one Codebeamer item to another. " +
-        "Downstream references represent derivation/traceability links (e.g. a requirement derived from another). " +
-        "The 'from' item gets the downstream reference pointing to the 'to' item.",
+        "Create a traceability reference where the downstream item is derived from or linked to the upstream item. " +
+        "Implementation updates the downstream item's superordinateRequirement field to include the upstream item.",
       inputSchema: {
         fromItemId: z
           .number()
           .int()
           .positive()
-          .describe("Item ID that will have the downstream reference added"),
+          .describe("Upstream/source item ID to reference"),
         toItemId: z
           .number()
           .int()
           .positive()
-          .describe("Item ID to reference as downstream"),
+          .describe("Downstream/derived item ID whose superordinateRequirement field will be updated"),
       },
     },
     async ({ fromItemId, toItemId }) => {
@@ -82,8 +81,8 @@ export function registerAssociationWriteTools(
       const text =
         `**Downstream reference created**\n\n` +
         `| Field | Value |\n|---|---|\n` +
-        `| Upstream (from) | #${fromItemId} |\n` +
-        `| Downstream (to) | #${toItemId} |`;
+        `| Upstream/source item | #${fromItemId} |\n` +
+        `| Downstream/derived item updated | #${toItemId} |`;
       return { content: [{ type: "text", text }] };
     },
   );

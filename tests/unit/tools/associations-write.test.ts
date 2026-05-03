@@ -39,3 +39,11 @@ describe("create_association", () => {
     expect(assoc.id).toBe(400);
   });
 });
+
+describe("create_reference", () => {
+  it("updates the downstream item field and handles empty success responses", async () => {
+    const client = makeClient();
+
+    await expect(client.createDownstreamReference(500, 502)).resolves.toBeUndefined();
+  });
+});

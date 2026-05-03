@@ -30,10 +30,20 @@ export interface CbTracker {
 
 export interface CbTrackerField {
   fieldId: number;
+  id?: number;
   name: string;
   type?: string;
   required?: boolean;
   hidden?: boolean;
+  valueModel?: string;
+  trackerItemField?: string;
+  legacyRestName?: string;
+  options?: CbTrackerSchemaOption[];
+  columns?: CbTrackerField[];
+  referenceType?: string;
+  referenceTypes?: string[];
+  multipleValues?: boolean;
+  allowedValues?: Array<{ id: number; name?: string; type?: string }>;
 }
 
 export interface CbTrackerSchemaOption {
@@ -137,7 +147,7 @@ export interface CbCreateItemRequest {
   priority?: { id: number };
   assignedTo?: Array<{ id: number }>;
   storyPoints?: number;
-  customFields?: Array<{ fieldId: number; type: string; value: unknown }>;
+  customFields?: Array<{ fieldId: number; type: string; value?: unknown; values?: unknown[] }>;
 }
 
 export interface CbUpdateItemRequest {
@@ -147,15 +157,22 @@ export interface CbUpdateItemRequest {
   priority?: { id: number };
   assignedTo?: Array<{ id: number }>;
   storyPoints?: number;
-  customFields?: Array<{ fieldId: number; type: string; values?: Array<{ id: number; type: string }>; value?: unknown }>;
+  customFields?: Array<{ fieldId: number; type: string; values?: unknown[]; value?: unknown }>;
 }
 
 export interface CbEditableField {
   fieldId: number;
   name: string;
-  values?: Array<{ id: number; name?: string; type?: string }>;
+  values?: unknown[];
   value?: unknown;
   type?: string;
+}
+
+export interface CbItemFieldsPage {
+  editableFields?: CbEditableField[];
+  readOnlyFields?: CbEditableField[];
+  editableTableFields?: CbEditableField[];
+  fields?: CbEditableField[];
 }
 
 export interface CbCreateCommentRequest {
@@ -200,6 +217,30 @@ function toArray<T>(response: unknown): T[] {
   return [];
 }
 
+function normalizeTrackerField(raw: CbTrackerField & { id?: number }): CbTrackerField {
+  return {
+    ...raw,
+    fieldId: raw.fieldId ?? raw.id ?? 0,
+  };
+}
+
+function normalizeEditableField(raw: CbEditableField & { id?: number }): CbEditableField {
+  return {
+    ...raw,
+    fieldId: raw.fieldId ?? raw.id ?? 0,
+  };
+}
+
+function normalizeItemFieldsPage(raw: CbItemFieldsPage): CbItemFieldsPage {
+  return {
+    ...raw,
+    editableFields: raw.editableFields?.map(normalizeEditableField),
+    readOnlyFields: raw.readOnlyFields?.map(normalizeEditableField),
+    editableTableFields: raw.editableTableFields?.map(normalizeEditableField),
+    fields: raw.fields?.map(normalizeEditableField),
+  };
+}
+
 // --- Client ---
 
 export class CodebeamerClient {
@@ -235,10 +276,29 @@ export class CodebeamerClient {
     return this.http.get(`/trackers/${id}`, { resource: `tracker ${id}` });
   }
 
-  getTrackerFields(id: number): Promise<CbTrackerField[]> {
-    return this.http.get(`/trackers/${id}/fields`, {
+  async getTrackerFields(id: number): Promise<CbTrackerField[]> {
+    const raw = await this.http.get<unknown>(`/trackers/${id}/fields`, {
       resource: `fields for tracker ${id}`,
     });
+    return toArray<CbTrackerField & { id?: number }>(raw).map(normalizeTrackerField);
+  }
+
+  getTrackerField(trackerId: number, fieldId: number): Promise<CbTrackerField> {
+    return this.http.get(`/trackers/${trackerId}/fields/${fieldId}`, {
+      resource: `field ${fieldId} for tracker ${trackerId}`,
+    });
+  }
+
+  async getTrackerRootChildren(
+    trackerId: number,
+    page: number,
+    pageSize: number,
+  ): Promise<CbReference[]> {
+    const raw = await this.http.get<unknown>(`/trackers/${trackerId}/children`, {
+      params: { page, pageSize },
+      resource: `root children for tracker ${trackerId}`,
+    });
+    return toArray(raw);
   }
 
   getTrackerSchema(id: number): Promise<CbTrackerSchemaField[]> {
@@ -252,39 +312,55 @@ export class CodebeamerClient {
     return this.http.get(`/items/${id}`, { resource: `item ${id}` });
   }
 
+  async getItemChildren(
+    itemId: number,
+    page: number,
+    pageSize: number,
+  ): Promise<CbReference[]> {
+    const raw = await this.http.get<unknown>(`/items/${itemId}/children`, {
+      params: { page, pageSize },
+      resource: `children for item ${itemId}`,
+    });
+    return toArray(raw);
+  }
+
   async listTrackerItems(
     trackerId: number,
     page: number,
     pageSize: number,
-  ): Promise<{ items: CbItem[]; debug?: string }> {
-    const raw = await this.http.get<unknown>("/items/query", {
-      params: { queryString: `tracker.id IN (${trackerId})`, page, pageSize },
-      resource: `items for tracker ${trackerId}`,
-    });
-    const items = toArray<CbItem>(raw);
-    if (items.length > 0) return { items };
-
-    // Items empty — also try the direct endpoint so we can show raw debug info
+  ): Promise<{ items: CbItem[]; debug?: string; source: "direct" | "query" }> {
     let rawDirect: unknown;
     try {
       rawDirect = await this.http.get<unknown>(`/trackers/${trackerId}/items`, {
         params: { page, pageSize },
-        resource: `items for tracker ${trackerId} (direct)`,
+        resource: `items for tracker ${trackerId}`,
       });
-    } catch {
-      rawDirect = null;
+      const directItems = toArray<CbItem>(rawDirect);
+      if (directItems.length > 0) return { items: directItems, source: "direct" };
+    } catch (error) {
+      rawDirect = error instanceof Error ? error.message : String(error);
     }
+
+    const raw = await this.http.get<unknown>("/items/query", {
+      params: { queryString: `tracker.id IN (${trackerId})`, page, pageSize },
+      resource: `items for tracker ${trackerId} (query fallback)`,
+    });
+    const items = toArray<CbItem>(raw);
+    if (items.length > 0) return { items, source: "query" };
+
     const rawObj = raw as Record<string, unknown> | null;
-    const directObj = rawDirect as Record<string, unknown> | null;
+    const directObj =
+      rawDirect && typeof rawDirect === "object"
+        ? (rawDirect as Record<string, unknown>)
+        : null;
     const queryTotal = rawObj?.["total"] ?? "?";
     const directTotal = directObj?.["total"] ?? "?";
-    const directItems = toArray<CbItem>(rawDirect);
     const debug =
-      `API vrátilo total=${queryTotal} pro cbQL query a total=${directTotal} pro přímý endpoint.\n` +
-      `Pokud je total=0, Codebeamer říká že tam žádné itemy nejsou (špatný tracker ID, chybí oprávnění nebo prázdný tracker).\n` +
-      `query: ${JSON.stringify(raw).slice(0, 300)}\n` +
-      `direct: ${JSON.stringify(rawDirect).slice(0, 300)}`;
-    return { items: directItems, debug };
+      `Direct endpoint total=${directTotal}; cbQL fallback total=${queryTotal}.\n` +
+      `If both totals are 0, Codebeamer reports no visible items for this tracker. Check tracker ID, permissions, or whether the tracker is empty.\n` +
+      `direct: ${JSON.stringify(rawDirect).slice(0, 300)}\n` +
+      `query: ${JSON.stringify(raw).slice(0, 300)}`;
+    return { items, debug, source: "query" };
   }
 
   async searchItems(
@@ -304,7 +380,7 @@ export class CodebeamerClient {
     const raw = await this.http.get<unknown>(`/items/${id}/reviews`, {
       resource: `reviews for item ${id}`,
     });
-    return Array.isArray(raw) ? raw : [];
+    return toArray(raw);
   }
 
   // Item details
@@ -360,11 +436,15 @@ export class CodebeamerClient {
     });
   }
 
+  async getItemFields(id: number): Promise<CbItemFieldsPage> {
+    const raw = await this.http.get<CbItemFieldsPage>(`/items/${id}/fields`, {
+      resource: `fields for item ${id}`,
+    });
+    return normalizeItemFieldsPage(raw);
+  }
+
   async getItemEditableFields(id: number): Promise<CbEditableField[]> {
-    const raw = await this.http.get<{ editableFields?: CbEditableField[] }>(
-      `/items/${id}/fields`,
-      { resource: `editable fields for item ${id}` },
-    );
+    const raw = await this.getItemFields(id);
     return raw.editableFields ?? [];
   }
 
@@ -388,7 +468,13 @@ export class CodebeamerClient {
     const fields = await this.getItemEditableFields(toItemId);
     const currentField = fields.find((f) => f.fieldId === superordinateField.id);
     const existingValues = currentField?.values ?? [];
-    if (existingValues.some((v) => v.id === fromItemId)) return; // already linked
+    if (
+      existingValues.some(
+        (v) => v && typeof v === "object" && "id" in v && v.id === fromItemId,
+      )
+    ) {
+      return; // already linked
+    }
 
     const newValues = [...existingValues, { id: fromItemId, type: "TrackerItemReference" }];
 

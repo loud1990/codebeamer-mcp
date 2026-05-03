@@ -2,9 +2,12 @@ import { describe, it, expect } from "vitest";
 import { HttpClient } from "../../../src/client/http-client.js";
 import { CodebeamerClient } from "../../../src/client/codebeamer-client.js";
 import {
+  formatItemChildren,
   formatRelations,
   formatReferences,
   formatComments,
+  formatItemFields,
+  formatReviews,
 } from "../../../src/formatters/item-formatter.js";
 
 const BASE = "https://test-cb.example.com/v3";
@@ -17,6 +20,65 @@ function makeClient() {
   });
   return new CodebeamerClient(http);
 }
+
+describe("get_item_children", () => {
+  it("returns formatted immediate child references", async () => {
+    const client = makeClient();
+    const children = await client.getItemChildren(500, 1, 25);
+    const text = formatItemChildren(children);
+
+    expect(text).toContain("## Child Items (2)");
+    expect(text).toContain("| 510 | Login child requirement | TrackerItemReference |");
+    expect(text).toContain("| 511 | Login child test case | TestCaseReference |");
+  });
+
+  it("returns an empty message when there are no children", async () => {
+    const client = makeClient();
+    const children = await client.getItemChildren(999, 1, 25);
+    const text = formatItemChildren(children);
+
+    expect(text).toBe("_No child items found._");
+  });
+});
+
+describe("get_item_fields", () => {
+  it("returns formatted editable and read-only fields", async () => {
+    const client = makeClient();
+    const fields = await client.getItemFields(500);
+    const text = formatItemFields(fields);
+
+    expect(text).toContain("## Item Fields (4)");
+    expect(text).toContain("### Editable Fields (3)");
+    expect(text).toContain("| 3 | Summary | TextFieldValue | Login button does not respond |");
+    expect(text).toContain("| 5 | Assigned to | ChoiceFieldValue | [1] john.doe |");
+    expect(text).toContain("### Read-Only Fields (1)");
+    expect(text).toContain("| 0 | ID | IntegerFieldValue | 500 |");
+  });
+
+  it("formats editable table fields", async () => {
+    const client = makeClient();
+    const fields = await client.getItemFields(154632);
+    const text = formatItemFields(fields);
+
+    expect(text).toContain("### Editable Table Fields (2)");
+    expect(text).toContain("#### Test Conducted");
+    expect(text).toContain("SYNTHETIC_TEST_CASE_NAME");
+    expect(text).toContain("#### PTR List");
+    expect(text).toContain("SYNTHETIC_PTR_TITLE");
+  });
+});
+
+describe("get_item_reviews", () => {
+  it("handles paginated review responses", async () => {
+    const client = makeClient();
+    const reviews = await client.getItemReviews(777);
+    const text = formatReviews(reviews);
+
+    expect(reviews).toHaveLength(1);
+    expect(text).toContain("APPROVED");
+    expect(text).toContain("reviewer\\|one");
+  });
+});
 
 describe("get_item_relations", () => {
   it("returns formatted associations", async () => {

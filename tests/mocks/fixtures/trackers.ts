@@ -28,3 +28,40 @@ export function makeTrackerField(
   };
 }
 
+export function makeDetailedTrackerField(
+  overrides: Partial<CbTrackerField> = {},
+): CbTrackerField {
+  return makeTrackerField({
+    fieldId: 7,
+    name: "Detected in release",
+    type: "ChoiceFieldValue",
+    required: false,
+    hidden: false,
+    valueModel: "ChoiceFieldValue",
+    trackerItemField: "customFields",
+    legacyRestName: "detectedInRelease",
+    multipleValues: true,
+    referenceTypes: ["ReleaseReference", "TrackerItemReference"],
+    options: [
+      { id: 10, name: "Release 1.0" },
+      { id: 11, name: "Release 2.0" },
+    ],
+    columns: [
+      {
+        fieldId: 8,
+        name: "Step action",
+        type: "WikiTextFieldValue",
+        valueModel: "WikiTextFieldValue",
+        legacyRestName: "action",
+      },
+      {
+        fieldId: 9,
+        name: "Expected result",
+        type: "WikiTextFieldValue",
+        valueModel: "WikiTextFieldValue",
+        legacyRestName: "expectedResult",
+      },
+    ],
+    ...overrides,
+  });
+}

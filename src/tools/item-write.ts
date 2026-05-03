@@ -7,6 +7,13 @@ import type {
 } from "../client/codebeamer-client.js";
 import { formatItem } from "../formatters/item-formatter.js";
 
+const customFieldSchema = z.object({
+  fieldId: z.number().int().positive(),
+  type: z.string().min(1),
+  value: z.unknown().optional(),
+  values: z.array(z.unknown()).optional(),
+});
+
 export function registerItemWriteTools(
   server: McpServer,
   client: CodebeamerClient,
@@ -66,9 +73,13 @@ export function registerItemWriteTools(
           .positive()
           .optional()
           .describe("Parent item ID to nest this item inside (e.g. a folder)"),
+        customFields: z
+          .array(customFieldSchema)
+          .optional()
+          .describe("Optional typed Codebeamer custom field payloads with fieldId, type, and value or values."),
       },
     },
-    async ({ trackerId, name, description, statusId, priorityId, assignedToIds, storyPoints, isFolder, itemTypeName, parentId }) => {
+    async ({ trackerId, name, description, statusId, priorityId, assignedToIds, storyPoints, isFolder, itemTypeName, parentId, customFields }) => {
       const data: CbCreateItemRequest = { name };
       const desiredType = itemTypeName ?? (isFolder ? "Folder" : undefined);
       if (desiredType) {
@@ -84,6 +95,7 @@ export function registerItemWriteTools(
       if (priorityId !== undefined) data.priority = { id: priorityId };
       if (assignedToIds !== undefined) data.assignedTo = assignedToIds.map((id) => ({ id }));
       if (storyPoints !== undefined) data.storyPoints = storyPoints;
+      if (customFields !== undefined) data.customFields = customFields;
 
       const item = await client.createItem(trackerId, data, parentId);
       return { content: [{ type: "text", text: formatItem(item) }] };
@@ -131,9 +143,13 @@ export function registerItemWriteTools(
           .min(0)
           .optional()
           .describe("New story points estimate"),
+        customFields: z
+          .array(customFieldSchema)
+          .optional()
+          .describe("Optional typed Codebeamer custom field payloads with fieldId, type, and value or values."),
       },
     },
-    async ({ itemId, name, description, statusId, priorityId, assignedToIds, storyPoints }) => {
+    async ({ itemId, name, description, statusId, priorityId, assignedToIds, storyPoints, customFields }) => {
       const data: CbUpdateItemRequest = {};
       if (name !== undefined) data.name = name;
       if (description !== undefined) data.description = description;
@@ -141,6 +157,7 @@ export function registerItemWriteTools(
       if (priorityId !== undefined) data.priority = { id: priorityId };
       if (assignedToIds !== undefined) data.assignedTo = assignedToIds.map((id) => ({ id }));
       if (storyPoints !== undefined) data.storyPoints = storyPoints;
+      if (customFields !== undefined) data.customFields = customFields;
 
       const item = await client.updateItem(itemId, data);
       return { content: [{ type: "text", text: formatItem(item) }] };
