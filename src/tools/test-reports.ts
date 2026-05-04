@@ -13,6 +13,7 @@ import {
   formatDailyTestReport,
   formatTestLogSchemaAnalysis,
   type DailyTestReport,
+  type DailyTestReportDiagnostics,
   type ObservedTestLogField,
   type ProjectDailyTestReport,
   type TestLogSchemaAnalysis,
@@ -114,6 +115,8 @@ interface DateWindow {
   start: string;
   end: string;
 }
+
+type DiagnosticsDraft = Omit<DailyTestReportDiagnostics, "finishedAt" | "durationMs">;
 
 function nextDay(date: string): string {
   const [year, month, day] = date.split("-").map(Number);
@@ -359,12 +362,27 @@ async function searchAllItems(
   client: CodebeamerClient,
   query: string,
   pageSize: number,
-): Promise<CbItem[]> {
+  diagnostics?: DiagnosticsDraft,
+  limit?: number,
+): Promise<{ items: CbItem[]; pages: number; durationMs: number; limited: boolean }> {
   const items: CbItem[] = [];
-  for (let page = 1; ; page += 1) {
+  const started = Date.now();
+  let page = 1;
+  for (;; page += 1) {
     const chunk = await client.searchItems(query, page, pageSize);
+    if (diagnostics) diagnostics.searchPagesFetched += 1;
     items.push(...chunk);
-    if (chunk.length < pageSize) return items;
+    if (limit !== undefined && items.length >= limit) {
+      return {
+        items: items.slice(0, limit),
+        pages: page,
+        durationMs: Date.now() - started,
+        limited: true,
+      };
+    }
+    if (chunk.length < pageSize) {
+      return { items, pages: page, durationMs: Date.now() - started, limited: false };
+    }
   }
 }
 
@@ -372,6 +390,7 @@ async function getAllItemChildren(
   client: CodebeamerClient,
   itemId: number,
   pageSize: number,
+  diagnostics?: DiagnosticsDraft,
 ): Promise<CbReference[]> {
   const children: CbReference[] = [];
   for (let page = 1; ; page += 1) {
@@ -389,7 +408,9 @@ async function buildNode(
   maxDepth: number,
   pageSize: number,
   visited: Set<number>,
+  diagnostics?: DiagnosticsDraft,
 ): Promise<TestReportNode> {
+  if (diagnostics) diagnostics.nodesFetched += 1;
   const item = await client.getItem(itemRef.id);
   const node: TestReportNode = {
     item,
@@ -405,10 +426,11 @@ async function buildNode(
   }
 
   visited.add(item.id);
-  const children = await getAllItemChildren(client, item.id, pageSize);
+  if (diagnostics) diagnostics.childListsFetched += 1;
+  const children = await getAllItemChildren(client, item.id, pageSize, diagnostics);
   for (const child of children) {
     node.children.push(
-      await buildNode(client, child, item.id, depth + 1, maxDepth, pageSize, visited),
+      await buildNode(client, child, item.id, depth + 1, maxDepth, pageSize, visited, diagnostics),
     );
   }
 
@@ -471,8 +493,27 @@ export async function generateDailyTestReport(
     dateField: string;
     maxDepth: number;
     pageSize: number;
+    verbose?: boolean;
+    maxTestRuns?: number;
   },
 ): Promise<DailyTestReport> {
+  const startedAt = new Date();
+  const diagnostics: DiagnosticsDraft | undefined = options.verbose
+    ? {
+        startedAt: startedAt.toISOString(),
+        projectsScanned: 0,
+        trackersScanned: 0,
+        testRunsFound: 0,
+        nodesFetched: 0,
+        childListsFetched: 0,
+        searchPagesFetched: 0,
+        maxDepth: options.maxDepth,
+        pageSize: options.pageSize,
+        maxTestRuns: options.maxTestRuns,
+        queries: [],
+        events: [],
+      }
+    : undefined;
   const window = dateWindow(options.date);
   const projectInputs = await resolveProjectReports(
     client,
@@ -480,8 +521,17 @@ export async function generateDailyTestReport(
     options.testRunTrackerIds,
     options.pageSize,
   );
+  if (diagnostics) {
+    diagnostics.projectsScanned = projectInputs.length;
+    diagnostics.trackersScanned = projectInputs.reduce(
+      (total, project) => total + project.trackers.length,
+      0,
+    );
+    diagnostics.events.push(`Resolved ${projectInputs.length} project group(s).`);
+  }
 
   const projects: ProjectDailyTestReport[] = [];
+  let remainingTestRuns = options.maxTestRuns;
   for (const projectInput of projectInputs) {
     const projectReport: ProjectDailyTestReport = {
       project: projectInput.project,
@@ -501,7 +551,43 @@ export async function generateDailyTestReport(
         `tracker.id IN (${tracker.id}) AND ` +
         `${options.dateField} >= ${cbqlDateLiteral(window.start)} AND ` +
         `${options.dateField} < ${cbqlDateLiteral(window.end)}`;
-      const testRuns = await searchAllItems(client, query, options.pageSize);
+      const searchResult = await searchAllItems(
+        client,
+        query,
+        options.pageSize,
+        diagnostics,
+        remainingTestRuns,
+      );
+      let testRuns = searchResult.items;
+      if (remainingTestRuns !== undefined) {
+        const allowed = Math.max(remainingTestRuns, 0);
+        if (searchResult.limited) {
+          projectReport.warnings.push(
+            `Report limited to ${options.maxTestRuns} test run(s); additional matching run(s) were not traversed.`,
+          );
+          diagnostics?.events.push(
+            `Applied maxTestRuns=${options.maxTestRuns}; stopped search early in tracker ${tracker.id}.`,
+          );
+        }
+        if (testRuns.length > allowed) {
+          testRuns = testRuns.slice(0, allowed);
+        }
+        remainingTestRuns -= testRuns.length;
+      }
+      if (diagnostics) {
+        diagnostics.testRunsFound += testRuns.length;
+        diagnostics.queries.push({
+          trackerId: tracker.id,
+          query,
+          pages: searchResult.pages,
+          results: searchResult.items.length,
+          durationMs: searchResult.durationMs,
+          limited: searchResult.limited,
+        });
+        diagnostics.events.push(
+          `Tracker ${tracker.id} returned ${searchResult.items.length} run(s) in ${searchResult.durationMs} ms${searchResult.limited ? " before the debug limit stopped paging" : ""}.`,
+        );
+      }
       for (const testRun of testRuns) {
         projectReport.testRuns.push(
           await buildNode(
@@ -512,13 +598,21 @@ export async function generateDailyTestReport(
             options.maxDepth,
             options.pageSize,
             new Set<number>(),
+            diagnostics,
           ),
         );
+      }
+      if (remainingTestRuns !== undefined && remainingTestRuns <= 0) {
+        diagnostics?.events.push("Stopped traversal because maxTestRuns was reached.");
+        break;
       }
     }
 
     projects.push(projectReport);
+    if (remainingTestRuns !== undefined && remainingTestRuns <= 0) break;
   }
+
+  const finishedAt = new Date();
 
   return {
     date: options.date,
@@ -527,6 +621,13 @@ export async function generateDailyTestReport(
     start: window.start,
     end: window.end,
     projects,
+    diagnostics: diagnostics
+      ? {
+          ...diagnostics,
+          finishedAt: finishedAt.toISOString(),
+          durationMs: finishedAt.getTime() - startedAt.getTime(),
+        }
+      : undefined,
   };
 }
 
@@ -723,9 +824,19 @@ export function registerTestReportTools(
           .max(50)
           .default(50)
           .describe("Items per page for searches and child traversal"),
+        verbose: z
+          .boolean()
+          .default(false)
+          .describe("Include diagnostics with query text, counts, and timing in the returned report."),
+        maxTestRuns: z
+          .number()
+          .int()
+          .min(1)
+          .optional()
+          .describe("Optional cap on test runs to search and traverse, useful for debugging large reports."),
       },
     },
-    async ({ date, timezone, projectIds, testRunTrackerIds, dateField, maxDepth, pageSize }) => {
+    async ({ date, timezone, projectIds, testRunTrackerIds, dateField, maxDepth, pageSize, verbose, maxTestRuns }) => {
       const report = await generateDailyTestReport(client, {
         date,
         timezone,
@@ -734,6 +845,8 @@ export function registerTestReportTools(
         dateField,
         maxDepth,
         pageSize,
+        verbose,
+        maxTestRuns,
       });
       return {
         content: [{ type: "text", text: formatDailyTestReport(report) }],

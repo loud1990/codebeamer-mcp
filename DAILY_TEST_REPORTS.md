@@ -123,6 +123,8 @@ Inputs:
 | `timezone` | Informational timezone label for the report. |
 | `maxDepth` | Maximum child recursion depth. |
 | `pageSize` | Pagination size. |
+| `verbose` | Include diagnostics with query text, counts, pages, and timing. |
+| `maxTestRuns` | Optional cap on test runs to search and traverse while debugging large reports. |
 
 Output:
 

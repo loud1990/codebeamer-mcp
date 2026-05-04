@@ -73,6 +73,69 @@ describe("generate_daily_test_report", () => {
     expect(text).toContain("Login form appears");
   });
 
+  it("includes diagnostics when verbose mode is enabled", async () => {
+    const client = makeClient();
+    const report = await generateDailyTestReport(client, {
+      date: "2026-05-01",
+      projectIds: [77],
+      testRunTrackerIds: [300],
+      dateField: "modifiedAt",
+      maxDepth: 1,
+      pageSize: 50,
+      verbose: true,
+    });
+    const text = formatDailyTestReport(report);
+
+    expect(report.diagnostics?.projectsScanned).toBe(1);
+    expect(report.diagnostics?.trackersScanned).toBe(1);
+    expect(report.diagnostics?.testRunsFound).toBe(1);
+    expect(report.diagnostics?.nodesFetched).toBe(2);
+    expect(report.diagnostics?.queries[0].query).toContain("modifiedAt >=");
+    expect(text).toContain("## Diagnostics");
+    expect(text).toContain("### Queries");
+  });
+
+  it("can cap traversed test runs for debugging", async () => {
+    mockServer.use(
+      http.get(`${BASE}/items/query`, ({ request }) => {
+        const url = new URL(request.url);
+        const query = url.searchParams.get("queryString") ?? "";
+        if (query.includes("tracker.id IN (300)")) {
+          return HttpResponse.json({
+            items: [
+              { id: 900, name: "Daily regression run" },
+              { id: 902, name: "Skipped regression run" },
+            ],
+          });
+        }
+        return HttpResponse.json({ items: [] });
+      }),
+      http.get(`${BASE}/items/902`, () =>
+        HttpResponse.json({ id: 902, name: "Skipped regression run" }),
+      ),
+      http.get(`${BASE}/items/902/children`, () =>
+        HttpResponse.json({ itemRefs: [] }),
+      ),
+    );
+
+    const client = makeClient();
+    const report = await generateDailyTestReport(client, {
+      date: "2026-05-01",
+      projectIds: [77],
+      testRunTrackerIds: [300],
+      dateField: "modifiedAt",
+      maxDepth: 1,
+      pageSize: 50,
+      verbose: true,
+      maxTestRuns: 1,
+    });
+
+    expect(report.projects[0].testRuns).toHaveLength(1);
+    expect(report.projects[0].warnings[0]).toContain("Report limited to 1 test run");
+    expect(report.diagnostics?.queries[0].limited).toBe(true);
+    expect(report.diagnostics?.events.some((event) => event.includes("maxTestRuns=1"))).toBe(true);
+  });
+
   it("discovers Test Run trackers from the project when tracker IDs are omitted", async () => {
     const client = makeClient();
     const report = await generateDailyTestReport(client, {

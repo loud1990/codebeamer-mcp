@@ -30,6 +30,30 @@ export interface ProjectDailyTestReport {
   warnings: string[];
 }
 
+export interface DailyTestReportDiagnostics {
+  startedAt: string;
+  finishedAt: string;
+  durationMs: number;
+  projectsScanned: number;
+  trackersScanned: number;
+  testRunsFound: number;
+  nodesFetched: number;
+  childListsFetched: number;
+  searchPagesFetched: number;
+  maxDepth: number;
+  pageSize: number;
+  maxTestRuns?: number;
+  queries: Array<{
+    trackerId: number;
+    query: string;
+    pages: number;
+    results: number;
+    durationMs: number;
+    limited?: boolean;
+  }>;
+  events: string[];
+}
+
 export interface DailyTestReport {
   date: string;
   timezone?: string;
@@ -37,6 +61,7 @@ export interface DailyTestReport {
   start: string;
   end: string;
   projects: ProjectDailyTestReport[];
+  diagnostics?: DailyTestReportDiagnostics;
 }
 
 export interface ObservedTestLogField {
@@ -148,6 +173,45 @@ export function formatDailyTestReport(report: DailyTestReport): string {
 
   if (report.timezone) {
     lines.push(`- **Timezone:** ${report.timezone}`);
+  }
+
+  if (report.diagnostics) {
+    const diagnostics = report.diagnostics;
+    lines.push(
+      "",
+      "## Diagnostics",
+      "",
+      `- **Started:** ${diagnostics.startedAt}`,
+      `- **Finished:** ${diagnostics.finishedAt}`,
+      `- **Duration:** ${diagnostics.durationMs} ms`,
+      `- **Projects scanned:** ${diagnostics.projectsScanned}`,
+      `- **Trackers scanned:** ${diagnostics.trackersScanned}`,
+      `- **Test runs found:** ${diagnostics.testRunsFound}`,
+      `- **Nodes fetched:** ${diagnostics.nodesFetched}`,
+      `- **Child lists fetched:** ${diagnostics.childListsFetched}`,
+      `- **Search pages fetched:** ${diagnostics.searchPagesFetched}`,
+      `- **Max depth:** ${diagnostics.maxDepth}`,
+      `- **Page size:** ${diagnostics.pageSize}`,
+    );
+    if (diagnostics.maxTestRuns !== undefined) {
+      lines.push(`- **Max test runs:** ${diagnostics.maxTestRuns}`);
+    }
+    if (diagnostics.queries.length > 0) {
+      lines.push("", "### Queries", "");
+      lines.push("| Tracker | Results | Pages | Duration | Query |");
+      lines.push("|---:|---:|---:|---:|---|");
+      for (const query of diagnostics.queries) {
+        lines.push(
+          `| ${query.trackerId} | ${query.results}${query.limited ? " (limited)" : ""} | ${query.pages} | ${query.durationMs} ms | ${escapeCell(query.query)} |`,
+        );
+      }
+    }
+    if (diagnostics.events.length > 0) {
+      lines.push("", "### Events", "");
+      for (const event of diagnostics.events) {
+        lines.push(`- ${event}`);
+      }
+    }
   }
 
   const projectCounts = report.projects.map((project) => ({
