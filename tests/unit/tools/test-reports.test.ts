@@ -1,4 +1,6 @@
 import { describe, it, expect } from "vitest";
+import { http, HttpResponse } from "msw";
+import { mockServer } from "../../setup.js";
 import { HttpClient } from "../../../src/client/http-client.js";
 import { CodebeamerClient } from "../../../src/client/codebeamer-client.js";
 import {
@@ -23,6 +25,31 @@ function makeClient() {
 }
 
 describe("generate_daily_test_report", () => {
+  it("uses cbQL-compatible single-quoted date literals for the date window", async () => {
+    let receivedQuery = "";
+    mockServer.use(
+      http.get(`${BASE}/items/query`, ({ request }) => {
+        const url = new URL(request.url);
+        receivedQuery = url.searchParams.get("queryString") ?? "";
+        return HttpResponse.json({ items: [] });
+      }),
+    );
+
+    const client = makeClient();
+    await generateDailyTestReport(client, {
+      date: "2026-04-21",
+      projectIds: [77],
+      testRunTrackerIds: [300],
+      dateField: "modifiedAt",
+      maxDepth: 0,
+      pageSize: 50,
+    });
+
+    expect(receivedQuery).toBe(
+      "tracker.id IN (300) AND modifiedAt >= '2026-04-21 00:00:00' AND modifiedAt < '2026-04-22 00:00:00'",
+    );
+  });
+
   it("generates a daily report with recursive child details and step results", async () => {
     const client = makeClient();
     const report = await generateDailyTestReport(client, {

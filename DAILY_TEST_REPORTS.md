@@ -16,7 +16,7 @@ Treat "today" as a bounded date window in the Codebeamer/project timezone.
 For example, for May 1, 2026 in `America/New_York`:
 
 ```text
-2026-05-01T00:00:00 <= test run date < 2026-05-02T00:00:00
+2026-05-01 00:00:00 <= test run date < 2026-05-02 00:00:00
 ```
 
 Do not use "last 24 hours" unless the user explicitly asks for a rolling window.
@@ -55,8 +55,8 @@ Conceptual cbQL:
 
 ```text
 tracker.id IN (TEST_RUN_TRACKER_ID)
-AND modifiedAt >= "2026-05-01T00:00:00"
-AND modifiedAt < "2026-05-02T00:00:00"
+AND modifiedAt >= '2026-05-01 00:00:00'
+AND modifiedAt < '2026-05-02 00:00:00'
 ```
 
 Use pagination for every search and child listing call.

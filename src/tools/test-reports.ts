@@ -123,9 +123,13 @@ function nextDay(date: string): string {
 
 function dateWindow(date: string): DateWindow {
   return {
-    start: `${date}T00:00:00`,
-    end: `${nextDay(date)}T00:00:00`,
+    start: `${date} 00:00:00`,
+    end: `${nextDay(date)} 00:00:00`,
   };
+}
+
+function cbqlDateLiteral(value: string): string {
+  return `'${value.replace(/'/g, "''")}'`;
 }
 
 function isTestRunTracker(tracker: CbTracker): boolean {
@@ -495,8 +499,8 @@ export async function generateDailyTestReport(
     for (const tracker of projectInput.trackers) {
       const query =
         `tracker.id IN (${tracker.id}) AND ` +
-        `${options.dateField} >= "${window.start}" AND ` +
-        `${options.dateField} < "${window.end}"`;
+        `${options.dateField} >= ${cbqlDateLiteral(window.start)} AND ` +
+        `${options.dateField} < ${cbqlDateLiteral(window.end)}`;
       const testRuns = await searchAllItems(client, query, options.pageSize);
       for (const testRun of testRuns) {
         projectReport.testRuns.push(
